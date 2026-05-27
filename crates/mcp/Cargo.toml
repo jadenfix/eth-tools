@@ -42,6 +42,16 @@ url.workspace = true
 # the HTTP router.
 eth-tools-core.workspace = true
 eth-tools-db.workspace = true
+# Write-side rails — we re-export ALLOWED_RECIPIENTS_HEX + ALLOWED_CHAIN_ID
+# so the dry-run preview cannot drift from the canonical wallet allowlist.
+# When phase 6.2's `payments::wallet::sign_and_send` lands the dep promotes
+# from constants-only to the full rails evaluator.
+eth-tools-payments.workspace = true
+
+# alloy primitives + sol-types — the write tools use `sol!` to derive
+# `*Call` types whose `abi_encode()` produces the on-the-wire calldata.
+alloy = { workspace = true, features = ["sol-types"] }
+alloy-primitives.workspace = true
 
 # Numeric / time types shared with the API DTOs.
 bigdecimal.workspace = true
@@ -58,3 +68,7 @@ testcontainers-modules.workspace = true
 # rmcp client + stdio-loopback transport lets the integration test drive
 # `tools/list` + `tools/call` in-process — no TCP socket, no port races.
 rmcp = { workspace = true, features = ["client", "transport-io"] }
+# Used by the write-side selector tests to derive keccak256 hashes for the
+# four function signatures — guards against any future `sol!` rename
+# silently flipping a selector under us.
+sha3 = "0.10"

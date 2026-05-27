@@ -50,7 +50,7 @@ fn lazy_pool() -> sqlx::PgPool {
 }
 
 #[tokio::test]
-async fn tools_list_returns_all_eight_phase5_tools() -> anyhow::Result<()> {
+async fn tools_list_returns_all_phase5_tools() -> anyhow::Result<()> {
     let (server_io, client_io) = tokio::io::duplex(8192);
 
     let server = EthToolsServer::new(AppState::new(lazy_pool()));
@@ -64,7 +64,9 @@ async fn tools_list_returns_all_eight_phase5_tools() -> anyhow::Result<()> {
     let listed = client.list_tools(Default::default()).await?;
     let names: Vec<&str> = listed.tools.iter().map(|t| t.name.as_ref()).collect();
 
+    // 8 read-side + 4 write-side (dry-run previews).
     for expected in [
+        // Read-side
         "find_agent",
         "inspect_agent",
         "search_agents",
@@ -73,13 +75,106 @@ async fn tools_list_returns_all_eight_phase5_tools() -> anyhow::Result<()> {
         "read_feedback",
         "read_validation",
         "health",
+        // Write-side dry-run previews (Phase-5)
+        "register_agent",
+        "give_feedback",
+        "set_agent_uri",
+        "request_validation",
     ] {
         assert!(
             names.contains(&expected),
             "tools/list missing `{expected}`; got: {names:?}"
         );
     }
-    assert_eq!(names.len(), 8, "unexpected tool count: {names:?}");
+    assert_eq!(names.len(), 12, "unexpected tool count: {names:?}");
+
+    client.cancel().await?;
+    let _ = server_handle.await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn call_register_agent_returns_preview_shape() -> anyhow::Result<()> {
+    // End-to-end check that a write tool round-trips through rmcp: arguments
+    // are decoded, the dry-run helper runs, and the response carries the
+    // documented WritePreview fields. We assert on the field SET rather than
+    // exact values so future tweaks to gas/cost defaults don't churn the
+    // integration suite.
+    let (server_io, client_io) = tokio::io::duplex(8192);
+    let server = EthToolsServer::new(AppState::new(lazy_pool()));
+    let server_handle = tokio::spawn(async move { serve_server(server, server_io).await });
+    let client = serve_client(DummyClient, client_io).await?;
+
+    let res = client
+        .call_tool(
+            rmcp::model::CallToolRequestParams::new("register_agent").with_arguments(
+                serde_json::json!({
+                    "chain": "base",
+                    "agent_uri": "https://example.com/agent.json"
+                })
+                .as_object()
+                .cloned()
+                .unwrap(),
+            ),
+        )
+        .await?;
+    let text = res
+        .content
+        .first()
+        .and_then(|c| c.raw.as_text())
+        .map(|t| t.text.as_str())
+        .expect("expected text content");
+    let parsed: serde_json::Value = serde_json::from_str(text)?;
+    assert_eq!(parsed["would_proceed"], true);
+    assert!(parsed.get("calldata_preview").is_some());
+    assert!(parsed["calldata_preview"]
+        .as_str()
+        .unwrap()
+        .starts_with("0x"));
+    assert_eq!(parsed["chain_id"].as_u64().unwrap(), 8453);
+    assert_eq!(parsed["dry_run"], true);
+    // Rails passed, so denied_reason is omitted from the wire payload.
+    assert!(parsed.get("denied_reason").is_none());
+
+    client.cancel().await?;
+    let _ = server_handle.await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn call_register_agent_on_testnet_yields_wrong_chain_denial() -> anyhow::Result<()> {
+    // Rails reject any chain other than Base mainnet (8453). base-sepolia
+    // (84532) is a valid chain name + the recipient (Identity registry) is
+    // correct, so the denial code MUST be WRONG_CHAIN — proves the rails
+    // mirror the phase-6 wallet's first-fail semantics.
+    let (server_io, client_io) = tokio::io::duplex(8192);
+    let server = EthToolsServer::new(AppState::new(lazy_pool()));
+    let server_handle = tokio::spawn(async move { serve_server(server, server_io).await });
+    let client = serve_client(DummyClient, client_io).await?;
+
+    let res = client
+        .call_tool(
+            rmcp::model::CallToolRequestParams::new("register_agent").with_arguments(
+                serde_json::json!({
+                    "chain": "base-sepolia",
+                    "agent_uri": "https://example.com/x"
+                })
+                .as_object()
+                .cloned()
+                .unwrap(),
+            ),
+        )
+        .await?;
+    let text = res
+        .content
+        .first()
+        .and_then(|c| c.raw.as_text())
+        .map(|t| t.text.as_str())
+        .expect("expected text content");
+    let parsed: serde_json::Value = serde_json::from_str(text)?;
+    assert_eq!(parsed["would_proceed"], false);
+    assert_eq!(parsed["denied_reason"]["code"], "WRONG_CHAIN");
+    assert_eq!(parsed["denied_reason"]["evaluator"], "wallet.chain");
 
     client.cancel().await?;
     let _ = server_handle.await;

@@ -13,6 +13,7 @@ pub mod feedback;
 pub mod health;
 pub mod manifest;
 pub mod validation;
+pub mod writes;
 
 use serde::Serialize;
 

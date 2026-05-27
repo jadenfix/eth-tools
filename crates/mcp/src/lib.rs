@@ -2,12 +2,19 @@
 //!
 //! # Surface (Phase-5)
 //!
-//! Eight **read-side** tools (plan §9.2). Write-side tools — `invoke`,
-//! `give_feedback`, `request_validation`, `respond_validation`,
-//! `register_agent`, `set_agent_uri`, `set_agent_wallet`,
-//! `mcp_from_agent_card`, `wallet_status` — defer until the Phase-6 wallet
-//! crate lands. See `TOOL_NAMES` below for the full forward-looking list
-//! and the inline `TODO(phase-6)` markers in `tools/mod.rs`.
+//! Eight **read-side** tools plus four **write-side dry-run previews**
+//! (plan §9.2). The write tools (`register_agent`, `give_feedback`,
+//! `set_agent_uri`, `request_validation`) encode calldata + run the two
+//! pure wallet rails (chain + recipient allowlist) and return a preview;
+//! they NEVER broadcast in this PR. Phase 6.2 swaps the preview path for
+//! `payments::wallet::sign_and_send`.
+//!
+//! Remaining write-side tools — `invoke`, `respond_validation`,
+//! `set_agent_wallet`, `mcp_from_agent_card`, `wallet_status`,
+//! `revoke_feedback`, `estimate_gas`, `generate_manifest`, `check_access`,
+//! `explain_access` — defer until the rest of the Phase-6/7 stack lands.
+//! See `TOOL_NAMES` below for the full forward-looking list and the inline
+//! `TODO(phase-6.2)` markers in `server.rs`.
 //!
 //! # Architecture
 //!
@@ -59,15 +66,16 @@ pub const TOOL_NAMES: &[&str] = &[
     "read_feedback",
     "read_validation",
     "health",
-    // Phase-6+ write-side (TODO_WRITE_SIDE):
+    // Phase-5 write-side dry-run previews (implemented; broadcast in 6.2):
+    "register_agent",
+    "give_feedback",
+    "set_agent_uri",
+    "request_validation",
+    // Phase-6+ remaining write-side (TODO_WRITE_SIDE):
     "invoke",
     "estimate_gas",
-    "give_feedback",
     "revoke_feedback",
-    "request_validation",
     "respond_validation",
-    "register_agent",
-    "set_agent_uri",
     "set_agent_wallet",
     "mcp_from_agent_card",
     "wallet_status",
@@ -178,10 +186,12 @@ mod tests {
 
     #[test]
     fn tool_names_includes_all_phase5_tools() {
-        // The 8 read-side tools that this PR ships must be present in the
-        // public constant so downstream consumers (dashboard, llms.txt
-        // generator) can enumerate them without booting the rmcp server.
+        // The 8 read-side + 4 write-side tools that this PR ships must be
+        // present in the public constant so downstream consumers
+        // (dashboard, llms.txt generator) can enumerate them without
+        // booting the rmcp server.
         for t in [
+            // Read-side
             "find_agent",
             "inspect_agent",
             "search_agents",
@@ -190,6 +200,11 @@ mod tests {
             "read_feedback",
             "read_validation",
             "health",
+            // Write-side dry-run previews
+            "register_agent",
+            "give_feedback",
+            "set_agent_uri",
+            "request_validation",
         ] {
             assert!(TOOL_NAMES.contains(&t), "missing tool: {t}");
         }

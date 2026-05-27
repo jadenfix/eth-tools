@@ -163,12 +163,82 @@ impl EthToolsServer {
             .map_err(to_mcp_err)
     }
 
-    // TODO(phase-6+): write-side tools land once `crates/wallet` exists.
-    // See `TOOL_NAMES` in lib.rs for the deferred list. Each one will be a
-    // thin wrapper that:
-    //   - resolves the active hot-wallet via `wallet::current()`
-    //   - estimates gas via `eth_tools_rpc::provider()`
-    //   - sends the tx, awaits 1 confirmation, returns the receipt
+    // ----- 9. register_agent — dry-run preview of `Identity.register(uri)`.
+    //
+    // Phase 6.2 will add a `dry_run: bool = true` argument to all four write
+    // tools and, on `dry_run = false`, swap the rails-only preview for
+    // `payments::wallet::sign_and_send`. Until then EVERY call is a preview;
+    // we never broadcast a transaction from this PR.
+    #[tool(description = "Dry-run preview for `Identity.register(string agentUri)`. \
+                       Encodes calldata, runs the pure wallet rails (chain + \
+                       recipient allowlist), and returns `{would_proceed, \
+                       denied_reason?, calldata_preview, gas_estimate, \
+                       estimated_cost_cents}`. Real signing lands in phase 6.2.")]
+    async fn register_agent(
+        &self,
+        Parameters(args): Parameters<tools::writes::RegisterAgentArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        tools::writes::register_agent(args)
+            .map(to_json_result)
+            .map_err(to_mcp_err)
+    }
+
+    // ----- 10. give_feedback — dry-run preview of `Reputation.giveFeedback`.
+    #[tool(description = "Dry-run preview for `Reputation.giveFeedback(uint256, \
+                       int8, uint8, bytes32, bytes32, string, string, bytes32)`. \
+                       Encodes calldata + rails check; never broadcasts. \
+                       Phase 6.2 enables real signing.")]
+    async fn give_feedback(
+        &self,
+        Parameters(args): Parameters<tools::writes::GiveFeedbackArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        tools::writes::give_feedback(args)
+            .map(to_json_result)
+            .map_err(to_mcp_err)
+    }
+
+    // ----- 11. set_agent_uri — dry-run preview of `Identity.setURI`.
+    //
+    // The rails confirm the recipient is the Identity registry; on-chain
+    // ownership of `agent_id` is enforced by the registry itself when the
+    // tx lands. API keys are not yet bound to wallets so we cannot
+    // pre-flight the owner check from the MCP side.
+    #[tool(description = "Dry-run preview for `Identity.setURI(uint256 agentId, \
+                       string newUri)`. Caller ownership is enforced on-chain \
+                       by the registry (API keys are not yet bound to wallets, \
+                       so a successful preview does not guarantee a successful \
+                       broadcast). Phase 6.2 enables real signing.")]
+    async fn set_agent_uri(
+        &self,
+        Parameters(args): Parameters<tools::writes::SetAgentUriArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        tools::writes::set_agent_uri(args)
+            .map(to_json_result)
+            .map_err(to_mcp_err)
+    }
+
+    // ----- 12. request_validation — dry-run preview of
+    //                                `Validation.requestValidation`.
+    #[tool(description = "Dry-run preview for `Validation.requestValidation(\
+                       uint256 agentId, string requestURI)`. Phase 6.2 enables \
+                       real signing.")]
+    async fn request_validation(
+        &self,
+        Parameters(args): Parameters<tools::writes::RequestValidationArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        tools::writes::request_validation(args)
+            .map(to_json_result)
+            .map_err(to_mcp_err)
+    }
+
+    // TODO(phase-6.2): swap each write tool's body for the signing path:
+    //   - resolve the active hot-wallet via `wallet::current()`
+    //   - estimate gas via `eth_tools_rpc::provider()`
+    //   - call `payments::wallet::sign_and_send`
+    //   - on `dry_run = true` (default) keep returning the preview shape
+    //
+    // The output schema already carries `would_proceed` + `denied_reason`,
+    // so the swap is binary-compatible from the MCP-client side.
 }
 
 #[tool_handler]
