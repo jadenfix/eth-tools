@@ -11,4 +11,18 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+sqlx.workspace = true
+uuid.workspace = true
+alloy.workspace = true
+alloy-primitives.workspace = true
 eth-tools-core.workspace = true
+eth-tools-db.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
+proptest = "1"
+testcontainers.workspace = true
+testcontainers-modules.workspace = true
+chrono.workspace = true

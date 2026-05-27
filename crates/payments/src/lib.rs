@@ -11,36 +11,14 @@
 // land one. The corresponding clippy guidance lives in `clippy.toml`.
 #![deny(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)]
 
-pub mod wallet {
-    /// Base mainnet only at MVP. Plan §10.5 control #3.
-    pub const ALLOWED_CHAIN_ID: u64 = 8453;
+pub mod denials;
+pub mod edge_config;
+pub mod wallet;
 
-    /// The three ERC-8004 registries are the only addresses we will sign
-    /// transactions to. Plan §10.5 control #2.
-    pub const ALLOWED_RECIPIENTS_HEX: &[&str] = &[
-        "8004A169FB4a3325136EB29fA0ceB6D2e539a432", // Identity
-        "8004BAa17C55a88189AE136b182e5fdA19dE9b63", // Reputation
-        "8004Cc8439f36fd5F9F049D9fF86523Df6dAAB58", // Validation
-    ];
-
-    /// $5 hard ceiling on the hot-wallet balance. W8 sweeps above this. §10.5 #4.
-    pub const MAX_BALANCE_USD_CENTS: u32 = 500;
-
-    /// $1/day spend cap, enforced by Upstash atomic INCRBY. §10.5 #5.
-    pub const MAX_DAILY_SPEND_USD_CENTS: u32 = 100;
-
-    /// Per-tx gas cap — refuse > 500k. Plan §10.2 rail #4.
-    pub const MAX_PER_TX_GAS: u64 = 500_000;
-
-    /// Vercel Edge Config key that gates every signed transaction. §10.5 #6.
-    pub const KILL_SWITCH_KEY: &str = "wallet_enabled";
-
-    /// Public env var name (never the private key). Logged at boot for sanity.
-    pub const PUBLIC_KEY_ENV: &str = "EVM_PUBLIC_KEY";
-
-    /// Private key env var. **NEVER LOG.** Sensitive in Vercel.
-    pub const PRIVATE_KEY_ENV: &str = "EVM_PRIVATE_KEY";
-}
+pub use wallet::{
+    ALLOWED_CHAIN_ID, ALLOWED_RECIPIENTS, ALLOWED_RECIPIENTS_HEX, KILL_SWITCH_KEY, MAX_BALANCE_USD_CENTS,
+    MAX_DAILY_SPEND_USD_CENTS, MAX_PER_TX_GAS, PRIVATE_KEY_ENV, PUBLIC_KEY_ENV,
+};
 
 // Compile-time invariants — promoted from runtime tests so weakening the
 // constants fails the build, not just the test suite.
@@ -84,5 +62,18 @@ mod tests {
     fn private_key_env_name_is_sensitive() {
         // Catches a careless rename that would orphan the Vercel Sensitive flag.
         assert_eq!(PRIVATE_KEY_ENV, "EVM_PRIVATE_KEY");
+    }
+
+    #[test]
+    fn allowed_recipients_match_hex_constants() {
+        // Both the strongly-typed Address constants and the legacy hex string
+        // constants must agree on the registry list. A drift here would let a
+        // future contributor "add a registry" in one place but not the other,
+        // silently widening the allowlist.
+        assert_eq!(ALLOWED_RECIPIENTS.len(), ALLOWED_RECIPIENTS_HEX.len());
+        for (addr, hex) in ALLOWED_RECIPIENTS.iter().zip(ALLOWED_RECIPIENTS_HEX) {
+            let formatted = format!("{:x}", addr).to_lowercase();
+            assert_eq!(formatted, hex.to_lowercase());
+        }
     }
 }
