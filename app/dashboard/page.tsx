@@ -3,7 +3,7 @@ import { auth, oauthEnabledHost } from '@/lib/auth';
 
 export default async function DashboardHome() {
   const session = await auth();
-  const oauthEnabled = oauthEnabledHost();
+  const oauthEnabled = await oauthEnabledHost();
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">

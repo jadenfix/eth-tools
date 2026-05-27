@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ApiError, getAgent, type Agent } from '@/lib/rust';
+import { ApiError, getAgent, safeExternalHref, type Agent } from '@/lib/rust';
 
 type RouteParams = Promise<{ chain: string; agent_id: string }>;
 
@@ -54,18 +54,27 @@ export default async function AgentDetailPage({
           {agent.agent_wallet ?? <span className="text-zinc-500">null</span>}
         </Row>
         <Row label="agent_uri">
-          {agent.agent_uri ? (
-            <a
-              href={agent.agent_uri}
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2"
-            >
-              {agent.agent_uri}
-            </a>
-          ) : (
-            <span className="text-zinc-500">null</span>
-          )}
+          {(() => {
+            const href = safeExternalHref(agent.agent_uri);
+            if (href) {
+              return (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  {agent.agent_uri}
+                </a>
+              );
+            }
+            if (agent.agent_uri) {
+              // URI present but scheme rejected — show as plain text so the
+              // operator still sees what was recorded on-chain.
+              return <span className="text-amber-400">{agent.agent_uri}</span>;
+            }
+            return <span className="text-zinc-500">null</span>;
+          })()}
         </Row>
         <Row label="registered_at">{agent.registered_at}</Row>
         <Row label="updated_at">{agent.updated_at}</Row>

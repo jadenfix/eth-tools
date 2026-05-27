@@ -76,6 +76,18 @@ pub async fn list(
         None => None,
         Some(c) => Some(decode_cursor(&c)?),
     };
+    // Confused-deputy guard: if the caller pins a chain AND replays a cursor,
+    // the cursor's chain MUST match the resolved chain. Otherwise a client can
+    // page `?chain=base` to get a cursor, then resubmit it with
+    // `?chain=base-sepolia&cursor=…` and the WHERE clause's `chain_id = $1`
+    // filter would interact with the keyset predicate in confusing ways. Today
+    // no per-chain ACL exists; rejecting the mismatch keeps the API honest
+    // before ACLs land.
+    if let (Some(want), Some(cur)) = (chain_id, after.as_ref()) {
+        if cur.chain_id != want {
+            return Err(ApiError::InvalidCursor);
+        }
+    }
     let limit = q.limit.clamp(1, 200);
 
     // Request limit+1 so we know whether there's a next page without a

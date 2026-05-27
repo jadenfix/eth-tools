@@ -3,9 +3,9 @@
 //! Reads only (Phase 1). Worker-side upserts land with `crates/workers` in
 //! Phase 4.
 //!
-//! Pagination is keyset on `(updated_at DESC, chain_id, agent_id)` so result
-//! pages are stable under concurrent worker writes — OFFSET pagination would
-//! drop or duplicate rows when the scraper bumps `updated_at`.
+//! Pagination is keyset on `(updated_at DESC, chain_id ASC, agent_id ASC)` so
+//! result pages are stable under concurrent worker writes — OFFSET pagination
+//! would drop or duplicate rows when the scraper bumps `updated_at`.
 
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
@@ -34,10 +34,13 @@ pub struct ListParams {
     pub after: Option<KeysetCursor>,
 }
 
-/// Stable keyset pointer. Compared lexicographically against
-/// `(updated_at DESC, chain_id, agent_id)` so a row with the same
-/// `updated_at` as the cursor but a higher (chain_id, agent_id) still
-/// appears on the next page.
+/// Stable keyset pointer. The filter in `list()` re-derives the strict
+/// "comes after" relation explicitly per column because Postgres tuple `<` is
+/// purely lexicographic — it has no mixed-direction (DESC/ASC) semantics, so
+/// using `(updated_at, chain_id, agent_id) < (…)` against an
+/// `ORDER BY updated_at DESC, chain_id ASC, agent_id ASC` clause silently drops
+/// rows whose `(chain_id, agent_id)` is *smaller* than the cursor on a tied
+/// `updated_at`. The expanded boolean form below is correct.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeysetCursor {
     pub updated_at: DateTime<Utc>,
@@ -48,9 +51,9 @@ pub struct KeysetCursor {
 pub async fn list(pool: &PgPool, params: ListParams) -> Result<Vec<AgentRow>, sqlx::Error> {
     let limit = params.limit.clamp(1, 200);
 
-    // Build the keyset filter conditionally; bind values with `bind` so the
-    // SQL stays a single prepared statement regardless of params present.
-    // Postgres compares the row tuple (a, b, c) < (x, y, z) lexicographically.
+    // Strict "after the cursor" predicate matching ORDER BY updated_at DESC,
+    // chain_id ASC, agent_id ASC. See KeysetCursor doc above for why this
+    // can't be expressed as a single tuple comparison.
     let base_sql = "
         SELECT chain_id, agent_id, owner, agent_uri, agent_wallet,
                registered_at, updated_at
@@ -58,7 +61,9 @@ pub async fn list(pool: &PgPool, params: ListParams) -> Result<Vec<AgentRow>, sq
         WHERE ($1::BIGINT IS NULL OR chain_id = $1)
           AND (
                 $2::TIMESTAMPTZ IS NULL
-                OR (updated_at, chain_id, agent_id) < ($2, $3, $4)
+                OR updated_at < $2
+                OR (updated_at = $2 AND chain_id > $3)
+                OR (updated_at = $2 AND chain_id = $3 AND agent_id > $4)
               )
         ORDER BY updated_at DESC, chain_id ASC, agent_id ASC
         LIMIT $5
@@ -96,4 +101,15 @@ pub async fn count(pool: &PgPool, chain_id: Option<i64>) -> Result<i64, sqlx::Er
     let sql = "SELECT COUNT(*) AS c FROM agents WHERE ($1::BIGINT IS NULL OR chain_id = $1)";
     let (c,): (i64,) = sqlx::query_as(sql).bind(chain_id).fetch_one(pool).await?;
     Ok(c)
+}
+
+/// Per-chain row counts in a single query. Replaces the N+1 loop in
+/// `/api/v1/health`. Returns `(chain_id, count)` for every chain that has at
+/// least one row; chains with zero rows are absent and the caller fills 0.
+pub async fn count_by_chain(pool: &PgPool) -> Result<Vec<(i64, i64)>, sqlx::Error> {
+    let rows: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT chain_id, COUNT(*)::BIGINT FROM agents GROUP BY chain_id")
+            .fetch_all(pool)
+            .await?;
+    Ok(rows)
 }
