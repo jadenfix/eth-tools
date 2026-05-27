@@ -23,6 +23,146 @@
     }
   ],
   "paths": {
+    "/api/v1/access/check": {
+      "post": {
+        "tags": [
+          "access"
+        ],
+        "operationId": "access_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Boolean allow/deny + one-line reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessCheckResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input (address / agent_id / chain)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "chain not indexed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/access/explain": {
+      "post": {
+        "tags": [
+          "access"
+        ],
+        "operationId": "access_explain",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Verbose policy breakdown",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessExplainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "chain not indexed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/agents": {
       "get": {
         "tags": [
@@ -75,6 +215,66 @@
           },
           "400": {
             "description": "invalid cursor or query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agents/search": {
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "agents_search",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Filtered agent list (non-paginated, hard cap 200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid filter (bad chain / bad owner hex)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
             "content": {
               "application/json": {
                 "schema": {
@@ -195,10 +395,835 @@
           }
         }
       }
+    },
+    "/api/v1/invoke": {
+      "post": {
+        "tags": [
+          "invoke"
+        ],
+        "operationId": "invoke_execute",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvokeExecute"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Submitted (broadcast=true) or signed-only (broadcast=false)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "x402 payment required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "x402 + wallet rails not yet wired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/invoke/prepare": {
+      "post": {
+        "tags": [
+          "invoke"
+        ],
+        "operationId": "invoke_prepare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvokePrepare"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Calldata + tx envelope, ready to sign",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvokePrepareResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "chain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manifest/generate": {
+      "post": {
+        "tags": [
+          "manifest"
+        ],
+        "operationId": "manifest_generate",
+        "requestBody": {
+          "description": "Free-form agent-card draft; required fields backfilled.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical manifest JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManifestGenerateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manifest/hash": {
+      "post": {
+        "tags": [
+          "manifest"
+        ],
+        "operationId": "manifest_hash",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManifestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Hashes of the raw manifest bytes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManifestHashResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "uri-mode requires the manifest-fetcher branch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manifest/validate": {
+      "post": {
+        "tags": [
+          "manifest"
+        ],
+        "operationId": "manifest_validate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManifestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Schema check result + structured errors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManifestValidateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input (both/neither of uri+bytes; oversize)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "uri-mode requires the manifest-fetcher branch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reputation/give": {
+      "post": {
+        "tags": [
+          "reputation"
+        ],
+        "operationId": "reputation_give",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReputationGiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Submitted reputation feedback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "x402 payment required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "wallet rails not yet wired (feat/phase-6-wallet-rails)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reputation/{chain}/{agent_id}": {
+      "get": {
+        "tags": [
+          "reputation"
+        ],
+        "operationId": "reputation_read",
+        "parameters": [
+          {
+            "name": "chain",
+            "in": "path",
+            "description": "Chain name or chain_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "uint256 as decimal string",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List feedback rows for an agent, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReputationList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "chain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/validation/request": {
+      "post": {
+        "tags": [
+          "validation"
+        ],
+        "operationId": "validation_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Validation request submitted on-chain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "x402 payment required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "wallet rails not yet wired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/validation/respond": {
+      "post": {
+        "tags": [
+          "validation"
+        ],
+        "operationId": "validation_respond",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidationRespond"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Validation response submitted on-chain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "x402 payment required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "wallet rails not yet wired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/validation/{chain}/{request_hash}": {
+      "get": {
+        "tags": [
+          "validation"
+        ],
+        "operationId": "validation_read",
+        "parameters": [
+          {
+            "name": "chain",
+            "in": "path",
+            "description": "Chain name or chain_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "request_hash",
+            "in": "path",
+            "description": "0x-prefixed 32-byte hex",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single validation row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "chain or validation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AccessCheckResponse": {
+        "type": "object",
+        "required": [
+          "allowed",
+          "reason"
+        ],
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "description": "One-line summary; details under `/access/explain`."
+          }
+        }
+      },
+      "AccessExplainResponse": {
+        "type": "object",
+        "required": [
+          "allowed",
+          "reason",
+          "steps"
+        ],
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessStep"
+            },
+            "description": "Ordered breakdown of which checks ran, what each returned, and the\nrule that produced the final answer."
+          }
+        }
+      },
+      "AccessRequest": {
+        "type": "object",
+        "required": [
+          "chain",
+          "agent_id",
+          "requester_address",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Free-form action name (`invoke`, `read_manifest`, …). The policy\nengine is the source of truth — handler echoes back."
+          },
+          "agent_id": {
+            "type": "string",
+            "description": "uint256 as decimal string."
+          },
+          "chain": {
+            "type": "string"
+          },
+          "requester_address": {
+            "type": "string",
+            "description": "0x-prefixed 20-byte hex."
+          }
+        }
+      },
+      "AccessStep": {
+        "type": "object",
+        "required": [
+          "check",
+          "ok",
+          "detail"
+        ],
+        "properties": {
+          "check": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      },
       "AgentDetail": {
         "type": "object",
         "description": "Concrete instantiation of `OneEnvelope<AgentDto>` — see `AgentList`.",
@@ -371,6 +1396,84 @@
           }
         }
       },
+      "FeedbackDto": {
+        "type": "object",
+        "required": [
+          "chain_id",
+          "agent_id",
+          "client_address",
+          "feedback_index",
+          "value",
+          "value_decimals",
+          "is_revoked",
+          "tx_hash",
+          "block_number"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "block_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "chain_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "client_address": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feedback_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feedback_index": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "feedback_uri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_revoked": {
+            "type": "boolean"
+          },
+          "tag1": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag2": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tx_hash": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "description": "Decimal string (NUMERIC(40,0)). Combine with `value_decimals` to\ninterpret as a fixed-point score."
+          },
+          "value_decimals": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "Health": {
         "type": "object",
         "required": [
@@ -399,6 +1502,481 @@
             "type": "string"
           }
         }
+      },
+      "InvokeExecute": {
+        "type": "object",
+        "required": [
+          "chain",
+          "agent_id",
+          "to",
+          "selector"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "args_hex": {
+            "type": "string"
+          },
+          "broadcast": {
+            "type": "boolean",
+            "description": "Whether to broadcast immediately. When `false`, the wallet rails return\nthe signed tx in `signed_tx_hex` so the caller can broadcast itself."
+          },
+          "chain": {
+            "type": "string"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "value_wei": {
+            "type": "string"
+          }
+        }
+      },
+      "InvokePrepare": {
+        "type": "object",
+        "required": [
+          "chain",
+          "agent_id",
+          "to",
+          "selector"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "args_hex": {
+            "type": "string",
+            "description": "Hex-encoded ABI args (concatenated, no `0x` prefix). Empty = no args."
+          },
+          "chain": {
+            "type": "string"
+          },
+          "selector": {
+            "type": "string",
+            "description": "4-byte function selector (`0x12345678`)."
+          },
+          "to": {
+            "type": "string",
+            "description": "0x-prefixed contract address to call. The wallet rails restrict this\nto the three ERC-8004 registries; preview mode is permissive but warns."
+          },
+          "value_wei": {
+            "type": "string"
+          }
+        }
+      },
+      "InvokePrepareResponse": {
+        "type": "object",
+        "required": [
+          "calldata",
+          "to",
+          "value_wei",
+          "chain_id",
+          "agent_id"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Echoed back so the caller can audit."
+          },
+          "calldata": {
+            "type": "string",
+            "description": "Fully-encoded calldata `0x` + selector + args. Hand this to the\nsigning rails (or a user's external wallet) — this endpoint never\nsigns anything."
+          },
+          "chain_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "to": {
+            "type": "string"
+          },
+          "value_wei": {
+            "type": "string"
+          }
+        }
+      },
+      "ManifestError": {
+        "type": "object",
+        "required": [
+          "pointer",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string",
+            "description": "RFC-6901 JSON Pointer to the failing field, e.g. `/services/0/endpoint`."
+          }
+        }
+      },
+      "ManifestGenerateResponse": {
+        "type": "object",
+        "required": [
+          "manifest"
+        ],
+        "properties": {
+          "manifest": {
+            "type": "object",
+            "description": "Canonical manifest as a JSON value. The caller can serialize +\nhash this to obtain the on-chain `agentURI` payload."
+          }
+        }
+      },
+      "ManifestHashResponse": {
+        "type": "object",
+        "required": [
+          "sha256",
+          "keccak256",
+          "byte_len"
+        ],
+        "properties": {
+          "byte_len": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "keccak256": {
+            "type": "string",
+            "description": "0x-prefixed 32-byte hex (keccak256 of the raw bytes — see\n`core::manifest::CANONICALIZATION_NOTE`)."
+          },
+          "sha256": {
+            "type": "string",
+            "description": "0x-prefixed 32-byte hex."
+          }
+        }
+      },
+      "ManifestInput": {
+        "type": "object",
+        "properties": {
+          "bytes_b64": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Inline manifest bytes, base64-standard-encoded. Capped at 64 KiB so\na buggy client can't OOM the function."
+          },
+          "uri": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Fetch the manifest from this URI (https://, ipfs://). Either `uri` OR\n`bytes_b64` must be set, not both."
+          }
+        }
+      },
+      "ManifestValidateResponse": {
+        "type": "object",
+        "required": [
+          "valid",
+          "errors",
+          "source"
+        ],
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManifestError"
+            },
+            "description": "Empty when `valid == true`. Each entry is a JSON Pointer + message."
+          },
+          "source": {
+            "type": "string",
+            "description": "Echoed back so the caller can correlate (`uri` if URL-sourced; empty\nwhen bytes were inlined)."
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ReputationGiveRequest": {
+        "type": "object",
+        "required": [
+          "chain",
+          "agent_id",
+          "value",
+          "value_decimals"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feedback_hash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "0x-prefixed 32-byte hex."
+          },
+          "feedback_uri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag1": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag2": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "description": "Decimal string for NUMERIC(40,0)."
+          },
+          "value_decimals": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReputationList": {
+        "type": "object",
+        "description": "Concrete instantiation for stable schema name — see `AgentList` doc.",
+        "required": [
+          "data",
+          "staleness_ms",
+          "source"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedbackDto"
+            }
+          },
+          "source": {
+            "type": "string",
+            "example": "db"
+          },
+          "staleness_ms": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SearchFilters": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Chain name (`base`) or chain_id as decimal string (`8453`). Omit for any."
+          },
+          "has_endpoint": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_manifest": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "0x-prefixed 20-byte hex owner address."
+          }
+        }
+      },
+      "SearchRequest": {
+        "type": "object",
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/SearchFilters"
+          },
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Clamped to [1, 200]; default 50."
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Substring matched against `agent_uri` ILIKE. Omit for \"any URI\"."
+          }
+        }
+      },
+      "ValidationDetail": {
+        "type": "object",
+        "required": [
+          "data",
+          "staleness_ms",
+          "source"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ValidationDto"
+          },
+          "source": {
+            "type": "string",
+            "example": "db"
+          },
+          "staleness_ms": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ValidationDto": {
+        "type": "object",
+        "required": [
+          "chain_id",
+          "request_hash",
+          "validator_addr",
+          "agent_id",
+          "request_uri",
+          "last_update"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_update": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "request_hash": {
+            "type": "string",
+            "description": "0x-prefixed 32-byte hex."
+          },
+          "request_uri": {
+            "type": "string"
+          },
+          "response": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "0..100 score; `None` until the validator responds."
+          },
+          "response_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "response_uri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "validator_addr": {
+            "type": "string",
+            "description": "0x-prefixed 20-byte hex."
+          }
+        }
+      },
+      "ValidationRequest": {
+        "type": "object",
+        "required": [
+          "chain",
+          "agent_id",
+          "validator_addr",
+          "request_uri",
+          "request_hash"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "request_hash": {
+            "type": "string",
+            "description": "0x-prefixed 32-byte hex (the canonical hash of the request_uri body)."
+          },
+          "request_uri": {
+            "type": "string"
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "validator_addr": {
+            "type": "string",
+            "description": "0x-prefixed 20-byte hex."
+          }
+        }
+      },
+      "ValidationRespond": {
+        "type": "object",
+        "required": [
+          "chain",
+          "request_hash",
+          "response"
+        ],
+        "properties": {
+          "chain": {
+            "type": "string"
+          },
+          "request_hash": {
+            "type": "string",
+            "description": "0x-prefixed 32-byte hex of the request being responded to."
+          },
+          "response": {
+            "type": "integer",
+            "format": "int32",
+            "description": "0..100 score."
+          },
+          "response_hash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "0x-prefixed 32-byte hex of the response body."
+          },
+          "response_uri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
       }
     }
   },
@@ -409,7 +1987,27 @@
     },
     {
       "name": "agents",
-      "description": "Read-only ERC-8004 agent lookups"
+      "description": "ERC-8004 agent lookups + search"
+    },
+    {
+      "name": "manifest",
+      "description": "Agent-card validation, hashing, canonicalisation"
+    },
+    {
+      "name": "access",
+      "description": "Policy engine: allow/deny + explain"
+    },
+    {
+      "name": "reputation",
+      "description": "ERC-8004 feedback reads + writes"
+    },
+    {
+      "name": "validation",
+      "description": "ERC-8004 validation rows + writes"
+    },
+    {
+      "name": "invoke",
+      "description": "Calldata prep + on-chain execution (stubbed until wallet rails)"
     }
   ]
 }

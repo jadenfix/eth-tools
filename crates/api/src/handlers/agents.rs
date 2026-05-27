@@ -11,12 +11,12 @@ use base64::Engine;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use eth_tools_core::chains;
-use eth_tools_db::agents::{self, KeysetCursor, ListParams};
+use eth_tools_db::agents::{self, KeysetCursor, ListParams, SearchParams};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use utoipa::IntoParams;
 
-use crate::dto::{AgentDto, ListEnvelope, OneEnvelope};
+use crate::dto::{AgentDto, ListEnvelope, OneEnvelope, SearchRequest};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -182,11 +182,82 @@ pub async fn get_one(
 
 /// Accept chain by name (`base`) or id (`8453`). Returns 404 envelope if
 /// neither matches.
-fn resolve_chain(s: &str) -> Result<&'static eth_tools_core::Chain, ApiError> {
+pub(crate) fn resolve_chain(s: &str) -> Result<&'static eth_tools_core::Chain, ApiError> {
     if let Ok(id) = s.parse::<u64>() {
         if let Some(c) = chains::by_id(id) {
             return Ok(c);
         }
     }
     chains::by_name(s).ok_or(ApiError::ChainNotFound)
+}
+
+/// Decode a `0x`-prefixed 20-byte address into raw bytes. Returns
+/// `InvalidAddress` on the slightest deviation (wrong prefix, wrong length,
+/// non-hex char) so we never silently truncate a malformed owner.
+pub(crate) fn parse_address(s: &str) -> Result<Vec<u8>, ApiError> {
+    let s = s.strip_prefix("0x").ok_or(ApiError::InvalidAddress)?;
+    if s.len() != 40 {
+        return Err(ApiError::InvalidAddress);
+    }
+    let mut out = Vec::with_capacity(20);
+    let bytes = s.as_bytes();
+    for chunk in bytes.chunks(2) {
+        let hi = (chunk[0] as char).to_digit(16).ok_or(ApiError::InvalidAddress)?;
+        let lo = (chunk[1] as char).to_digit(16).ok_or(ApiError::InvalidAddress)?;
+        out.push(((hi as u8) << 4) | (lo as u8));
+    }
+    Ok(out)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/agents/search",
+    tag = "agents",
+    operation_id = "agents_search",
+    request_body = crate::dto::SearchRequest,
+    responses(
+        (status = 200, description = "Filtered agent list (non-paginated, hard cap 200)", body = crate::dto::AgentList),
+        (status = 400, description = "invalid filter (bad chain / bad owner hex)", body = crate::dto::ApiErrorBody),
+        (status = 429, description = "rate limited", body = crate::dto::ApiErrorBody),
+        (status = 500, description = "internal error", body = crate::dto::ApiErrorBody),
+    )
+)]
+pub async fn search(
+    State(state): State<AppState>,
+    Json(req): Json<SearchRequest>,
+) -> Result<Json<ListEnvelope<AgentDto>>, ApiError> {
+    let limit = req.limit.unwrap_or(50).clamp(1, 200);
+    let chain_id = match req.filters.chain.as_deref() {
+        None => None,
+        Some(c) => Some(resolve_chain(c)?.chain_id as i64),
+    };
+    let owner = match req.filters.owner.as_deref() {
+        None => None,
+        Some(a) => Some(parse_address(a)?),
+    };
+    let rows = agents::search(
+        &state.pool,
+        SearchParams {
+            query: req.query,
+            chain_id,
+            owner,
+            has_manifest: req.filters.has_manifest,
+            has_endpoint: req.filters.has_endpoint,
+            limit,
+        },
+    )
+    .await?;
+    let data: Vec<AgentDto> = rows
+        .into_iter()
+        .map(|r| {
+            let chain_name = chains::by_id(r.chain_id as u64).map(|c| c.name).unwrap_or("unknown");
+            AgentDto::from_row(r, chain_name)
+        })
+        .collect();
+    Ok(Json(ListEnvelope {
+        data,
+        next_cursor: None,
+        staleness_ms: 0,
+        source: "db",
+    }))
 }

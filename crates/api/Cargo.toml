@@ -19,10 +19,21 @@ bigdecimal.workspace = true
 chrono.workspace = true
 base64.workspace = true
 thiserror.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+uuid.workspace = true
+jsonschema.workspace = true
+url.workspace = true
 utoipa = { workspace = true, features = ["axum_extras"] }
 
 eth-tools-core = { workspace = true, features = ["utoipa"] }
 eth-tools-db.workspace = true
+
+[features]
+default = []
+# Bypass Bearer-token middleware. Used by handler unit tests that don't want
+# to mint a fake API key per case. NEVER enable in release builds.
+test-bypass-auth = []
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

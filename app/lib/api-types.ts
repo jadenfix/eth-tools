@@ -4,6 +4,38 @@
  */
 
 export interface paths {
+    "/api/v1/access/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["access_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["access_explain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -14,6 +46,22 @@ export interface paths {
         get: operations["agents_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["agents_search"];
         delete?: never;
         options?: never;
         head?: never;
@@ -52,10 +100,197 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["invoke_execute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoke/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["invoke_prepare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/manifest/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["manifest_generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/manifest/hash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["manifest_hash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/manifest/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["manifest_validate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reputation/give": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reputation_give"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reputation/{chain}/{agent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reputation_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/validation/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validation_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/validation/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validation_respond"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/validation/{chain}/{request_hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["validation_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccessCheckResponse: {
+            allowed: boolean;
+            /** @description One-line summary; details under `/access/explain`. */
+            reason: string;
+        };
+        AccessExplainResponse: {
+            allowed: boolean;
+            reason: string;
+            /** @description Ordered breakdown of which checks ran, what each returned, and the
+             *     rule that produced the final answer. */
+            steps: components["schemas"]["AccessStep"][];
+        };
+        AccessRequest: {
+            /** @description Free-form action name (`invoke`, `read_manifest`, …). The policy
+             *     engine is the source of truth — handler echoes back. */
+            action: string;
+            /** @description uint256 as decimal string. */
+            agent_id: string;
+            chain: string;
+            /** @description 0x-prefixed 20-byte hex. */
+            requester_address: string;
+        };
+        AccessStep: {
+            check: string;
+            detail: string;
+            ok: boolean;
+        };
         /** @description Concrete instantiation of `OneEnvelope<AgentDto>` — see `AgentList`. */
         AgentDetail: {
             data: components["schemas"]["AgentDto"];
@@ -120,6 +355,28 @@ export interface components {
             is_testnet: boolean;
             name: string;
         };
+        FeedbackDto: {
+            agent_id: string;
+            /** Format: int64 */
+            block_number: number;
+            /** Format: int64 */
+            chain_id: number;
+            client_address: string;
+            endpoint?: string | null;
+            feedback_hash?: string | null;
+            /** Format: int64 */
+            feedback_index: number;
+            feedback_uri?: string | null;
+            is_revoked: boolean;
+            tag1?: string | null;
+            tag2?: string | null;
+            tx_hash: string;
+            /** @description Decimal string (NUMERIC(40,0)). Combine with `value_decimals` to
+             *     interpret as a fixed-point score. */
+            value: string;
+            /** Format: int32 */
+            value_decimals: number;
+        };
         Health: {
             /** Format: int64 */
             agents_indexed: number;
@@ -131,6 +388,165 @@ export interface components {
             status: string;
             version: string;
         };
+        InvokeExecute: {
+            agent_id: string;
+            args_hex?: string;
+            /** @description Whether to broadcast immediately. When `false`, the wallet rails return
+             *     the signed tx in `signed_tx_hex` so the caller can broadcast itself. */
+            broadcast?: boolean;
+            chain: string;
+            selector: string;
+            to: string;
+            value_wei?: string;
+        };
+        InvokePrepare: {
+            agent_id: string;
+            /** @description Hex-encoded ABI args (concatenated, no `0x` prefix). Empty = no args. */
+            args_hex?: string;
+            chain: string;
+            /** @description 4-byte function selector (`0x12345678`). */
+            selector: string;
+            /** @description 0x-prefixed contract address to call. The wallet rails restrict this
+             *     to the three ERC-8004 registries; preview mode is permissive but warns. */
+            to: string;
+            value_wei?: string;
+        };
+        InvokePrepareResponse: {
+            /** @description Echoed back so the caller can audit. */
+            agent_id: string;
+            /** @description Fully-encoded calldata `0x` + selector + args. Hand this to the
+             *     signing rails (or a user's external wallet) — this endpoint never
+             *     signs anything. */
+            calldata: string;
+            /** Format: int64 */
+            chain_id: number;
+            to: string;
+            value_wei: string;
+        };
+        ManifestError: {
+            message: string;
+            /** @description RFC-6901 JSON Pointer to the failing field, e.g. `/services/0/endpoint`. */
+            pointer: string;
+        };
+        ManifestGenerateResponse: {
+            /** @description Canonical manifest as a JSON value. The caller can serialize +
+             *     hash this to obtain the on-chain `agentURI` payload. */
+            manifest: Record<string, never>;
+        };
+        ManifestHashResponse: {
+            byte_len: number;
+            /** @description 0x-prefixed 32-byte hex (keccak256 of the raw bytes — see
+             *     `core::manifest::CANONICALIZATION_NOTE`). */
+            keccak256: string;
+            /** @description 0x-prefixed 32-byte hex. */
+            sha256: string;
+        };
+        ManifestInput: {
+            /** @description Inline manifest bytes, base64-standard-encoded. Capped at 64 KiB so
+             *     a buggy client can't OOM the function. */
+            bytes_b64?: string | null;
+            /** @description Fetch the manifest from this URI (https://, ipfs://). Either `uri` OR
+             *     `bytes_b64` must be set, not both. */
+            uri?: string | null;
+        };
+        ManifestValidateResponse: {
+            /** @description Empty when `valid == true`. Each entry is a JSON Pointer + message. */
+            errors: components["schemas"]["ManifestError"][];
+            /** @description Echoed back so the caller can correlate (`uri` if URL-sourced; empty
+             *     when bytes were inlined). */
+            source: string;
+            valid: boolean;
+        };
+        ReputationGiveRequest: {
+            agent_id: string;
+            chain: string;
+            endpoint?: string | null;
+            /** @description 0x-prefixed 32-byte hex. */
+            feedback_hash?: string | null;
+            feedback_uri?: string | null;
+            tag1?: string | null;
+            tag2?: string | null;
+            /** @description Decimal string for NUMERIC(40,0). */
+            value: string;
+            /** Format: int32 */
+            value_decimals: number;
+        };
+        /** @description Concrete instantiation for stable schema name — see `AgentList` doc. */
+        ReputationList: {
+            data: components["schemas"]["FeedbackDto"][];
+            /** @example db */
+            source: string;
+            /** Format: int64 */
+            staleness_ms: number;
+        };
+        SearchFilters: {
+            /** @description Chain name (`base`) or chain_id as decimal string (`8453`). Omit for any. */
+            chain?: string | null;
+            has_endpoint?: boolean | null;
+            has_manifest?: boolean | null;
+            /** @description 0x-prefixed 20-byte hex owner address. */
+            owner?: string | null;
+        };
+        SearchRequest: {
+            filters?: components["schemas"]["SearchFilters"];
+            /**
+             * Format: int64
+             * @description Clamped to [1, 200]; default 50.
+             */
+            limit?: number | null;
+            /** @description Substring matched against `agent_uri` ILIKE. Omit for "any URI". */
+            query?: string | null;
+        };
+        ValidationDetail: {
+            data: components["schemas"]["ValidationDto"];
+            /** @example db */
+            source: string;
+            /** Format: int64 */
+            staleness_ms: number;
+        };
+        ValidationDto: {
+            agent_id: string;
+            /** Format: int64 */
+            chain_id: number;
+            /** Format: date-time */
+            last_update: string;
+            /** @description 0x-prefixed 32-byte hex. */
+            request_hash: string;
+            request_uri: string;
+            /**
+             * Format: int32
+             * @description 0..100 score; `None` until the validator responds.
+             */
+            response?: number | null;
+            response_hash?: string | null;
+            response_uri?: string | null;
+            tag?: string | null;
+            /** @description 0x-prefixed 20-byte hex. */
+            validator_addr: string;
+        };
+        ValidationRequest: {
+            agent_id: string;
+            chain: string;
+            /** @description 0x-prefixed 32-byte hex (the canonical hash of the request_uri body). */
+            request_hash: string;
+            request_uri: string;
+            tag?: string | null;
+            /** @description 0x-prefixed 20-byte hex. */
+            validator_addr: string;
+        };
+        ValidationRespond: {
+            chain: string;
+            /** @description 0x-prefixed 32-byte hex of the request being responded to. */
+            request_hash: string;
+            /**
+             * Format: int32
+             * @description 0..100 score.
+             */
+            response: number;
+            /** @description 0x-prefixed 32-byte hex of the response body. */
+            response_hash?: string | null;
+            response_uri?: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -140,6 +556,126 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    access_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessRequest"];
+            };
+        };
+        responses: {
+            /** @description Boolean allow/deny + one-line reason */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessCheckResponse"];
+                };
+            };
+            /** @description bad input (address / agent_id / chain) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description chain not indexed */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    access_explain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessRequest"];
+            };
+        };
+        responses: {
+            /** @description Verbose policy breakdown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessExplainResponse"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description chain not indexed */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     agents_list: {
         parameters: {
             query?: {
@@ -167,6 +703,57 @@ export interface operations {
             };
             /** @description invalid cursor or query */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    agents_search: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Filtered agent list (non-paginated, hard cap 200) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentList"];
+                };
+            };
+            /** @description invalid filter (bad chain / bad owner hex) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -253,6 +840,627 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    invoke_execute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvokeExecute"];
+            };
+        };
+        responses: {
+            /** @description Submitted (broadcast=true) or signed-only (broadcast=false) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description missing bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description x402 payment required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description x402 + wallet rails not yet wired */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    invoke_prepare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvokePrepare"];
+            };
+        };
+        responses: {
+            /** @description Calldata + tx envelope, ready to sign */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvokePrepareResponse"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description missing bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description chain not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    manifest_generate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Free-form agent-card draft; required fields backfilled. */
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Canonical manifest JSON */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestGenerateResponse"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    manifest_hash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManifestInput"];
+            };
+        };
+        responses: {
+            /** @description Hashes of the raw manifest bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestHashResponse"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description uri-mode requires the manifest-fetcher branch */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    manifest_validate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManifestInput"];
+            };
+        };
+        responses: {
+            /** @description Schema check result + structured errors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestValidateResponse"];
+                };
+            };
+            /** @description bad input (both/neither of uri+bytes; oversize) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description uri-mode requires the manifest-fetcher branch */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    reputation_give: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReputationGiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Submitted reputation feedback */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description missing bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description x402 payment required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description wallet rails not yet wired (feat/phase-6-wallet-rails) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    reputation_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Chain name or chain_id */
+                chain: string;
+                /** @description uint256 as decimal string */
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List feedback rows for an agent, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReputationList"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description chain not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    validation_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidationRequest"];
+            };
+        };
+        responses: {
+            /** @description Validation request submitted on-chain */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description missing bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description x402 payment required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description wallet rails not yet wired */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    validation_respond: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidationRespond"];
+            };
+        };
+        responses: {
+            /** @description Validation response submitted on-chain */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description missing bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description x402 payment required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description wallet rails not yet wired */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    validation_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Chain name or chain_id */
+                chain: string;
+                /** @description 0x-prefixed 32-byte hex */
+                request_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Single validation row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationDetail"];
+                };
+            };
+            /** @description bad input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description chain or validation not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
             /** @description internal error */

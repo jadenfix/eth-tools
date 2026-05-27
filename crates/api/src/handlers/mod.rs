@@ -4,8 +4,13 @@
 //! Heavy logic (db queries, cursor encoding) lives in helpers under the
 //! relevant submodule.
 
+pub mod access;
 pub mod agents;
 pub mod health;
+pub mod invoke;
+pub mod manifest;
+pub mod reputation;
+pub mod validation;
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
