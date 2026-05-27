@@ -1,12 +1,60 @@
 [package]
 name = "eth-tools-mcp"
-description = "MCP server tools (rmcp) for eth-tools"
+description = "MCP server (rmcp Streamable HTTP) for eth-tools — read-side tools + RFC 9728 auth"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 version.workspace = true
 
 [dependencies]
+# Async runtime + serde — minimum surface, no extra features unless rmcp
+# pulls them transitively.
+tokio = { workspace = true, features = ["sync"] }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+
+# HTTP plumbing — must match the bridge's axum 0.7 + tower 0.5 so the
+# auth middleware composes with `Router::merge` in the Vercel entrypoint.
+axum.workspace = true
+tower.workspace = true
+http.workspace = true
+
+# rmcp + its JSON-schema generator. `schemars` is re-exported by rmcp but
+# we depend on it directly so tool input DTOs can derive `JsonSchema`
+# without pulling rmcp into the public API of every module.
+rmcp.workspace = true
+schemars = { workspace = true, features = ["chrono04"] }
+
+# Manifest tools (`hash_manifest`, `validate_manifest`) — sha2 for the
+# content hash, jsonschema for the ERC-8004 manifest schema, reqwest for
+# `uri:` fetch (rustls only — Vercel doesn't bundle openssl).
+sha2.workspace = true
+jsonschema.workspace = true
+reqwest.workspace = true
+base64.workspace = true
+url.workspace = true
+
+# Shared model + DB layer — tools call these directly rather than re-entering
+# the HTTP router.
+eth-tools-core.workspace = true
+eth-tools-db.workspace = true
+
+# Numeric / time types shared with the API DTOs.
+bigdecimal.workspace = true
+chrono.workspace = true
+
+# Used both for the `From<sqlx::Error>` impl on `ToolError` and for the
+# small `MAX(updated_at)` query inside the health tool.
+sqlx.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }
+testcontainers.workspace = true
+testcontainers-modules.workspace = true
+# rmcp client + stdio-loopback transport lets the integration test drive
+# `tools/list` + `tools/call` in-process — no TCP socket, no port races.
+rmcp = { workspace = true, features = ["client", "transport-io"] }

@@ -32,11 +32,7 @@ use eth_tools_db::worker_runs;
 /// [`serve_with_context`] instead — it provides the pool + rpc + force flag.
 ///
 /// PR3 deletes this shim once the wrappers migrate.
-pub async fn serve<F, Fut>(
-    worker_name: &'static str,
-    req: Request,
-    body: F,
-) -> Result<Response<Body>, Error>
+pub async fn serve<F, Fut>(worker_name: &'static str, req: Request, body: F) -> Result<Response<Body>, Error>
 where
     F: FnOnce(bool) -> Fut,
     Fut: Future<Output = Result<WorkerSummary, Error>>,
@@ -49,9 +45,9 @@ where
     // BUT we must NOT call serve_with_context here, because that would
     // try to init `context::deps()` even for the stub callers (which have
     // no DATABASE_URL in dev). Instead we run the guards inline.
-    Ok(serve_legacy_inner(worker_name, req, body).await.unwrap_or_else(|e| {
-        internal_error(worker_name, &e.to_string())
-    }))
+    Ok(serve_legacy_inner(worker_name, req, body)
+        .await
+        .unwrap_or_else(|e| internal_error(worker_name, &e.to_string())))
 }
 
 /// **New M1-refactor entrypoint.** Closure receives a [`WorkerContext`]
@@ -61,11 +57,7 @@ where
 /// On any internal failure (auth, deps init, body error) returns a
 /// well-formed `Response` rather than propagating `Result::Err` — Vercel
 /// cron paths must always emit a status, never a panic.
-pub async fn serve_with_context<F, Fut>(
-    worker_name: &'static str,
-    req: Request,
-    body: F,
-) -> Response<Body>
+pub async fn serve_with_context<F, Fut>(worker_name: &'static str, req: Request, body: F) -> Response<Body>
 where
     F: FnOnce(WorkerContext) -> Fut,
     Fut: Future<Output = Result<WorkerSummary, Error>>,
@@ -400,14 +392,10 @@ mod tests {
         // runs (legacy path, no deps).
         std::env::set_var("VERCEL_ENV", "preview");
         std::env::remove_var("CRON_SECRET");
-        let r = serve(
-            "test_w",
-            req_with(&[], Some("force=1")),
-            |dr| async move {
-                assert!(!dr);
-                Ok(WorkerSummary::ok("test_w"))
-            },
-        )
+        let r = serve("test_w", req_with(&[], Some("force=1")), |dr| async move {
+            assert!(!dr);
+            Ok(WorkerSummary::ok("test_w"))
+        })
         .await
         .unwrap();
         assert_eq!(r.status(), StatusCode::OK);

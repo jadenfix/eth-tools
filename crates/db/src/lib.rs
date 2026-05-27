@@ -14,6 +14,8 @@ use std::time::Duration;
 pub mod agents;
 pub mod chains_seed;
 pub mod cursors;
+pub mod feedback;
+pub mod validations;
 pub mod worker_runs;
 
 pub use sqlx::PgPool as Pool;

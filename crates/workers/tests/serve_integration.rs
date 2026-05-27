@@ -65,12 +65,11 @@ fn req_with_secret(secret: &'static str, query: Option<&str>) -> Request {
 }
 
 async fn count_runs(pool: &eth_tools_db::Pool) -> i64 {
-    let (c,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*)::BIGINT FROM worker_runs WHERE worker_name = $1")
-            .bind(WORKER_NAME)
-            .fetch_one(pool)
-            .await
-            .expect("count");
+    let (c,): (i64,) = sqlx::query_as("SELECT COUNT(*)::BIGINT FROM worker_runs WHERE worker_name = $1")
+        .bind(WORKER_NAME)
+        .fetch_one(pool)
+        .await
+        .expect("count");
     c
 }
 
@@ -83,26 +82,33 @@ async fn serve_writes_worker_runs_and_skips_on_dryrun() {
     // Install deps before any `cron::serve` call — `context::deps()` would
     // otherwise try to read `DATABASE_URL`. The Stub RotatingProvider is
     // fine here; this test never touches RPC.
-    use eth_tools_rpc::RotatingProvider;
     use async_trait::async_trait;
+    use eth_tools_rpc::RotatingProvider;
     use eth_tools_rpc::{RpcError, RpcProvider};
 
     struct TestProvider;
     #[async_trait]
     impl RpcProvider for TestProvider {
-        fn name(&self) -> &str { "test-provider" }
-        async fn get_block_number(&self) -> Result<u64, RpcError> { Ok(0) }
+        fn name(&self) -> &str {
+            "test-provider"
+        }
+        async fn get_block_number(&self) -> Result<u64, RpcError> {
+            Ok(0)
+        }
         async fn get_logs(
             &self,
             _f: &alloy::rpc::types::Filter,
-        ) -> Result<Vec<alloy::rpc::types::Log>, RpcError> { Ok(vec![]) }
+        ) -> Result<Vec<alloy::rpc::types::Log>, RpcError> {
+            Ok(vec![])
+        }
     }
 
     let deps = WorkerDeps {
         pool: pool.clone(),
         rpc: Arc::new(RotatingProvider::new(vec![Arc::new(TestProvider)])),
     };
-    install_for_test(deps).map_err(|_| "install_for_test: DEPS already initialized")
+    install_for_test(deps)
+        .map_err(|_| "install_for_test: DEPS already initialized")
         .expect("install_for_test");
 
     // Production + correct secret → body runs, audit row written.
@@ -138,7 +144,11 @@ async fn serve_writes_worker_runs_and_skips_on_dryrun() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     let after = count_runs(&pool).await;
-    assert_eq!(after, before + 1, "non-dryrun must write exactly one worker_runs row");
+    assert_eq!(
+        after,
+        before + 1,
+        "non-dryrun must write exactly one worker_runs row"
+    );
 
     // Verify the row is terminal (ok=true, finished_at set, row counts
     // preserved). Pull the latest by id.
@@ -209,7 +219,9 @@ async fn serve_writes_worker_runs_and_skips_on_dryrun() {
 
     let mut conn = pool.acquire().await.expect("acquire");
     assert!(cursors::get(&mut conn, &key).await.expect("get").is_none());
-    cursors::advance(&mut conn, &key, 1_234_567, 4).await.expect("advance");
+    cursors::advance(&mut conn, &key, 1_234_567, 4)
+        .await
+        .expect("advance");
     let got = cursors::get(&mut conn, &key)
         .await
         .expect("get after advance")
@@ -218,7 +230,9 @@ async fn serve_writes_worker_runs_and_skips_on_dryrun() {
     assert_eq!(got.last_block, 1_234_567);
     assert_eq!(got.last_log_index, 4);
     // Re-advance updates in place.
-    cursors::advance(&mut conn, &key, 1_234_900, 0).await.expect("re-advance");
+    cursors::advance(&mut conn, &key, 1_234_900, 0)
+        .await
+        .expect("re-advance");
     let got2 = cursors::get(&mut conn, &key).await.expect("get2").unwrap();
     assert_eq!(got2.last_block, 1_234_900);
     assert_eq!(got2.last_log_index, 0);
@@ -231,13 +245,12 @@ async fn serve_writes_worker_runs_and_skips_on_dryrun() {
     let run_id = h.run_id();
     assert!(run_id > 0);
     wr::finish_ok(&pool, h, 11, 22).await.expect("finish_ok");
-    let (rows_in, rows_out, ok): (Option<i32>, Option<i32>, Option<bool>) = sqlx::query_as(
-        "SELECT rows_in, rows_out, ok FROM worker_runs WHERE id = $1",
-    )
-    .bind(run_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let (rows_in, rows_out, ok): (Option<i32>, Option<i32>, Option<bool>) =
+        sqlx::query_as("SELECT rows_in, rows_out, ok FROM worker_runs WHERE id = $1")
+            .bind(run_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(rows_in, Some(11));
     assert_eq!(rows_out, Some(22));
     assert_eq!(ok, Some(true));
