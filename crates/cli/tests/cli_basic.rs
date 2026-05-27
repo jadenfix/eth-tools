@@ -38,17 +38,59 @@ fn help_lists_in_scope_subcommands() {
 }
 
 #[test]
-fn help_does_not_list_deferred_subcommands() {
-    // These belong to follow-up PRs; if they accidentally land in the CLI
-    // we want to know immediately.
-    let out = cmd().arg("--help").output().expect("run cli");
-    let text = String::from_utf8_lossy(&out.stdout).to_string();
-    for forbidden in [" register ", " invoke ", " watch ", " workers ", " wallet "] {
-        assert!(
-            !text.contains(forbidden),
-            "deferred command {forbidden:?} leaked into --help output:\n{text}"
-        );
-    }
+fn help_lists_phase_7_completion_subcommands() {
+    // Inverted (post phase-7 completion) from the earlier "deferred" guard:
+    // all 13 plan §9.3 commands must now show in `--help`. If one drops out
+    // (e.g. a clap derive bug or a removed enum variant), this test fails.
+    cmd()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("register"))
+        .stdout(predicate::str::contains("invoke"))
+        .stdout(predicate::str::contains("watch"))
+        .stdout(predicate::str::contains("mcp"))
+        .stdout(predicate::str::contains("workers"))
+        .stdout(predicate::str::contains("wallet"))
+        .stdout(predicate::str::contains("backfill"));
+}
+
+#[test]
+fn mcp_subcommands_listed() {
+    cmd()
+        .args(["mcp", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("install"))
+        .stdout(predicate::str::contains("from-card"));
+}
+
+#[test]
+fn workers_subcommands_listed() {
+    cmd()
+        .args(["workers", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status"));
+}
+
+#[test]
+fn wallet_subcommands_listed() {
+    cmd()
+        .args(["wallet", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("status"));
+}
+
+#[test]
+fn register_requires_a_mode() {
+    // Neither --interactive nor --manifest => clear error, no network.
+    cmd()
+        .arg("register")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--interactive").or(predicate::str::contains("--manifest")));
 }
 
 #[test]

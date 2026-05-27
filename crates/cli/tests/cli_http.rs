@@ -289,6 +289,294 @@ fn accepts_http_localhost_url() {
 }
 
 #[tokio::test]
+async fn register_interactive_drives_full_flow_via_stdin() {
+    // Server stubs the two endpoints the interactive flow hits:
+    //   POST /api/v1/manifest/generate -> assembled manifest
+    //   POST /api/v1/manifest/hash     -> sha256/keccak256
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/manifest/generate"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "name": "My Agent",
+            "skills": ["risk"],
+            "services": []
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/manifest/hash"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "sha256": "0xaa",
+            "keccak256": "0xbb"
+        })))
+        .mount(&server)
+        .await;
+
+    // Scripted stdin: name, description, skills, "n" to no extra services.
+    // RealRegisterIo reads via std::io::stdin().read_line which assert_cmd's
+    // .write_stdin can drive directly.
+    let script = "My Agent\nA test agent\nrisk\nn\n";
+
+    cli(&server.uri())
+        .arg("register")
+        .arg("--interactive")
+        .write_stdin(script)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("manifest assembled"))
+        .stdout(predicate::str::contains("0xaa"))
+        .stdout(predicate::str::contains("0xbb"));
+}
+
+#[tokio::test]
+async fn invoke_renders_output_field() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/invoke"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "output": { "score": 42 },
+            "request_id": "req_abc"
+        })))
+        .mount(&server)
+        .await;
+
+    // Write a tiny input file the CLI can read.
+    let tmpdir = tempfile::tempdir().expect("tempdir");
+    let input_path = tmpdir.path().join("input.json");
+    std::fs::write(&input_path, br#"{"address": "0xdead"}"#).unwrap();
+
+    cli(&server.uri())
+        .args(["invoke", "base/42", "--input"])
+        .arg(&input_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("output:"))
+        .stdout(predicate::str::contains("request_id: req_abc"));
+
+    // Leak tempdir so it survives the assert.
+    std::mem::forget(tmpdir);
+}
+
+#[tokio::test]
+async fn invoke_surfaces_402_payment_required_cleanly() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/invoke"))
+        .respond_with(ResponseTemplate::new(402).set_body_json(json!({
+            "error": { "code": "PAYMENT_REQUIRED", "evaluator": "x402" }
+        })))
+        .mount(&server)
+        .await;
+
+    let tmpdir = tempfile::tempdir().expect("tempdir");
+    let input_path = tmpdir.path().join("input.json");
+    std::fs::write(&input_path, b"{}").unwrap();
+
+    cli(&server.uri())
+        .args(["invoke", "base/42", "--input"])
+        .arg(&input_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("payment required"))
+        .stderr(predicate::str::contains("--x-payment"));
+    std::mem::forget(tmpdir);
+}
+
+#[tokio::test]
+async fn watch_polls_once_with_max_iters_and_prints_rows() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/agents"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [
+                {
+                    "chain": "base",
+                    "agent_id": "1",
+                    "owner": "0xfeed",
+                    "agent_uri": "https://example.com/a.json"
+                }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    cli(&server.uri())
+        .args(["watch", "base", "--max-iters", "1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[base] 1"))
+        .stdout(predicate::str::contains("0xfeed"));
+}
+
+#[tokio::test]
+async fn workers_status_renders_table() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/workers/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "workers": [
+                {
+                    "name": "registry_scraper",
+                    "last_ok_at": "2024-01-01T00:00:00Z",
+                    "age_seconds": 42,
+                    "cursor_lag": 3,
+                    "env": "production"
+                }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    cli(&server.uri())
+        .args(["workers", "status"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("registry_scraper"))
+        .stdout(predicate::str::contains("production"));
+}
+
+#[tokio::test]
+async fn workers_status_404_prints_not_yet_deployed() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/workers/status"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(json!({
+            "error": { "code": "NOT_FOUND" }
+        })))
+        .mount(&server)
+        .await;
+
+    cli(&server.uri())
+        .args(["workers", "status"])
+        .assert()
+        .success() // Soft-fail: not yet deployed should NOT crash the CLI.
+        .stderr(predicate::str::contains("not yet deployed"));
+}
+
+#[tokio::test]
+async fn wallet_status_renders_balance_and_kill_switch() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/wallet/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "balance_usdc": "12.34",
+            "spend_today_usdc": "0.50",
+            "kill_switch": false,
+            "allowlist": ["0xabc", "0xdef"]
+        })))
+        .mount(&server)
+        .await;
+
+    cli(&server.uri())
+        .args(["wallet", "status"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("balance USDC:"))
+        .stdout(predicate::str::contains("12.34"))
+        .stdout(predicate::str::contains("kill switch:      off"))
+        .stdout(predicate::str::contains("0xabc"));
+}
+
+#[tokio::test]
+async fn wallet_status_404_prints_not_yet_deployed() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/wallet/status"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&server)
+        .await;
+
+    cli(&server.uri())
+        .args(["wallet", "status"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("not yet deployed"));
+}
+
+#[tokio::test]
+async fn mcp_from_card_emits_ts_with_card_data() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/agent-card.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "name": "Test Scorer",
+            "services": [
+                { "type": "A2A", "endpoint": "https://example.com/a2a" }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let tmpdir = tempfile::tempdir().expect("tempdir");
+    let out_path = tmpdir.path().join("out.ts");
+    let url = format!("{}/agent-card.json", server.uri());
+
+    cli(&server.uri())
+        .args(["mcp", "from-card"])
+        .arg(&url)
+        .args(["--out"])
+        .arg(&out_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("wrote"));
+
+    let ts = std::fs::read_to_string(&out_path).unwrap();
+    assert!(ts.contains("Test Scorer"), "TS should embed name: {ts}");
+    assert!(ts.contains("https://example.com/a2a"), "TS should embed endpoint");
+    std::mem::forget(tmpdir);
+}
+
+#[tokio::test]
+async fn backfill_dry_run_uses_rpc_only() {
+    // Stand up a mock RPC server that answers eth_blockNumber.
+    let rpc = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": "0x10" // 16
+        })))
+        .mount(&rpc)
+        .await;
+
+    // The API server should NOT be hit at all — backfill only talks to RPC.
+    let api = MockServer::start().await;
+
+    cli(&api.uri())
+        .env("RPC_URL_PRIMARY", rpc.uri())
+        .args(["backfill", "--chain", "base", "--from-block", "5", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("from-block:  5"))
+        .stdout(predicate::str::contains("to-block:    16"))
+        .stdout(predicate::str::contains("span:        11"))
+        .stdout(predicate::str::contains("(dry-run)"));
+}
+
+#[tokio::test]
+async fn backfill_non_dry_run_prints_not_yet_exposed() {
+    let rpc = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": "0x100"
+        })))
+        .mount(&rpc)
+        .await;
+    let api = MockServer::start().await;
+
+    cli(&api.uri())
+        .env("RPC_URL_PRIMARY", rpc.uri())
+        .args(["backfill", "--chain", "base", "--from-block", "0"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("not yet exposed"));
+}
+
+#[tokio::test]
 async fn api_error_body_is_surfaced_verbatim() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))

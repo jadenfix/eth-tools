@@ -12,6 +12,23 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::time::Duration;
 
+/// Typed error so commands can distinguish "endpoint not deployed yet" (404)
+/// from a real failure. Wrapped in `anyhow::Error` via `Into`, so existing
+/// command code that just `?`s the result continues to work.
+#[derive(Debug)]
+pub struct ApiError {
+    pub status: StatusCode,
+    pub message: String,
+}
+
+impl std::fmt::Display for ApiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ({})", self.status, self.message)
+    }
+}
+
+impl std::error::Error for ApiError {}
+
 pub const DEFAULT_API_URL: &str = "https://eth-tools.dev";
 
 /// Validate that `raw` is a syntactically valid base URL the CLI is willing to
@@ -139,12 +156,14 @@ impl Client {
 
         if !status.is_success() {
             let body_text = String::from_utf8_lossy(&bytes).into_owned();
-            return Err(anyhow!(
-                "{} {} -> {}",
-                self.base,
-                path,
-                pretty_error(status, &body_text)
-            ));
+            let pretty = pretty_error(status, &body_text);
+            // Preserve the status code via a typed error so callers can
+            // distinguish 404 / 402 / etc. via `err.downcast_ref::<ApiError>()`.
+            return Err(anyhow::Error::new(ApiError {
+                status,
+                message: pretty.clone(),
+            })
+            .context(format!("{} {} -> {}", self.base, path, pretty)));
         }
 
         if bytes.is_empty() {
@@ -183,6 +202,134 @@ impl Client {
     pub async fn manifest_hash(&self, manifest: &Value) -> Result<Value> {
         self.send(Method::POST, "/api/v1/manifest/hash", Some(manifest))
             .await
+    }
+
+    /// `POST /api/v1/manifest/generate` — server-side manifest construction
+    /// (route lands with phase-7 server work). Body is a free-form JSON object
+    /// of registration inputs (name, description, skills, services).
+    pub async fn manifest_generate(&self, inputs: &Value) -> Result<Value> {
+        self.send(Method::POST, "/api/v1/manifest/generate", Some(inputs))
+            .await
+    }
+
+    /// `POST /api/v1/invoke` — execute a tool against a registered agent.
+    /// `body` is `{ "agent": "<chain>/<id>", "input": <json>, ...optional fields }`.
+    /// On 402 (Payment Required) callers should inspect the error and surface
+    /// the x402 challenge to the user.
+    pub async fn invoke(&self, body: &Value) -> Result<Value> {
+        self.send(Method::POST, "/api/v1/invoke", Some(body)).await
+    }
+
+    /// `POST /api/v1/invoke` with an extra `X-Payment` header carrying an
+    /// EIP-3009 USDC authorization. Used after a 402 challenge.
+    pub async fn invoke_with_payment(&self, body: &Value, x_payment: &str) -> Result<Value> {
+        let mut req = self
+            .http
+            .request(Method::POST, self.url("/api/v1/invoke"))
+            .header("X-Payment", x_payment)
+            .json(body);
+        if let Some(tok) = self.token.as_deref() {
+            req = req.header(header::AUTHORIZATION, format!("Bearer {tok}"));
+        }
+        let resp = req.send().await.context("HTTP request failed")?;
+        let status = resp.status();
+        let bytes = resp.bytes().await.context("read response body")?;
+        if !status.is_success() {
+            let body_text = String::from_utf8_lossy(&bytes).into_owned();
+            let pretty = pretty_error(status, &body_text);
+            return Err(anyhow::Error::new(ApiError {
+                status,
+                message: pretty.clone(),
+            })
+            .context(format!("{} /api/v1/invoke -> {}", self.base, pretty)));
+        }
+        if bytes.is_empty() {
+            return Ok(Value::Null);
+        }
+        serde_json::from_slice::<Value>(&bytes).context("decode invoke response")
+    }
+
+    /// `GET /api/v1/agents?chain=<chain>&since=<cursor>&limit=...` — used by
+    /// `watch` to poll for new agents until a real SSE backend lands.
+    pub async fn list_agents_since(
+        &self,
+        chain: &str,
+        since: Option<&str>,
+    ) -> Result<Value> {
+        let mut q: Vec<(&str, &str)> = vec![("chain", chain), ("limit", "100")];
+        if let Some(c) = since {
+            q.push(("since", c));
+        }
+        let url = reqwest::Url::parse_with_params(&self.url("/api/v1/agents"), &q)
+            .context("build /agents URL")?;
+        let mut req = self.http.request(Method::GET, url);
+        if let Some(tok) = self.token.as_deref() {
+            req = req.header(header::AUTHORIZATION, format!("Bearer {tok}"));
+        }
+        let resp = req.send().await.context("HTTP request failed")?;
+        let status = resp.status();
+        let bytes = resp.bytes().await.context("read response body")?;
+        if !status.is_success() {
+            let body_text = String::from_utf8_lossy(&bytes).into_owned();
+            let pretty = pretty_error(status, &body_text);
+            return Err(anyhow::Error::new(ApiError {
+                status,
+                message: pretty.clone(),
+            })
+            .context(format!("{} /api/v1/agents -> {}", self.base, pretty)));
+        }
+        if bytes.is_empty() {
+            return Ok(Value::Null);
+        }
+        serde_json::from_slice::<Value>(&bytes).context("decode /agents response")
+    }
+
+    /// `GET /api/v1/workers/status` — lightweight endpoint (not yet deployed).
+    /// Returns the underlying error verbatim; the command layer detects 404
+    /// and surfaces a friendly "not yet deployed" message.
+    pub async fn workers_status(&self) -> Result<Value> {
+        self.send(Method::GET, "/api/v1/workers/status", None).await
+    }
+
+    /// `GET /api/v1/wallet/status` — same caveat as `workers_status`.
+    pub async fn wallet_status(&self) -> Result<Value> {
+        self.send(Method::GET, "/api/v1/wallet/status", None).await
+    }
+
+    /// Fetch an arbitrary URL (agent-card JSON). Used by `mcp from-card`.
+    /// Bypasses the API base URL but still routes through the hardened
+    /// reqwest client (timeouts, no redirects, no userinfo). We allow
+    /// plain `http://` here (unlike `validate_api_url`) because no
+    /// Authorization header is ever attached — the worst case is a
+    /// content-MITM on the agent card itself, which the user has opted
+    /// into by pasting a non-https URL.
+    pub async fn fetch_agent_card(&self, url: &str) -> Result<Value> {
+        let parsed = url::Url::parse(url).with_context(|| format!("invalid URL {url:?}"))?;
+        if !matches!(parsed.scheme(), "https" | "http") {
+            return Err(anyhow!(
+                "unsupported scheme {:?}; expected http(s)",
+                parsed.scheme()
+            ));
+        }
+        if !parsed.username().is_empty() || parsed.password().is_some() {
+            return Err(anyhow!("URL must not contain userinfo"));
+        }
+        let resp = self
+            .http
+            .get(parsed)
+            .send()
+            .await
+            .context("HTTP request failed")?;
+        let status = resp.status();
+        let bytes = resp.bytes().await.context("read response body")?;
+        if !status.is_success() {
+            return Err(anyhow!(
+                "GET {url} -> {}",
+                pretty_error(status, &String::from_utf8_lossy(&bytes))
+            ));
+        }
+        serde_json::from_slice::<Value>(&bytes)
+            .with_context(|| format!("decode JSON from {url}"))
     }
 }
 

@@ -1,9 +1,16 @@
 //! Command implementations. One module per top-level command group.
 pub mod auth;
+pub mod backfill;
 pub mod find;
 pub mod health;
 pub mod inspect;
+pub mod invoke;
 pub mod manifest;
+pub mod mcp;
+pub mod register;
+pub mod wallet;
+pub mod watch;
+pub mod workers;
 
 use crate::client::Client;
 use crate::config::ConfigPaths;

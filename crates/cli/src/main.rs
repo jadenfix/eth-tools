@@ -1,8 +1,9 @@
 //! `eth-tools` CLI entry point.
 //!
-//! Scope (this PR): auth (login/whoami/logout), find, inspect, manifest
-//! validate/hash, health. Other plan §9.3 commands (register, invoke, watch,
-//! mcp, workers, wallet, backfill) are intentionally deferred.
+//! Scope (post phase-7 completion): auth (login/whoami/logout), find,
+//! inspect, manifest {validate,hash}, health, register, invoke, watch,
+//! mcp {install,from-card}, workers status, wallet status, backfill.
+//! All plan §9.3 commands (13 total) are now wired.
 
 use clap::{Parser, Subcommand};
 use eth_tools_cli::client::{validate_api_url, DEFAULT_API_URL};
@@ -69,6 +70,63 @@ enum Command {
     },
     /// Hit `/api/v1/health` and render the chain registry.
     Health,
+    /// Register a new ERC-8004 agent (interactive or via a manifest file).
+    Register {
+        /// Walk the user through name/description/skills/services prompts.
+        #[arg(long, conflicts_with = "manifest")]
+        interactive: bool,
+        /// Path to a pre-assembled manifest JSON file (non-interactive).
+        #[arg(long, conflicts_with = "interactive")]
+        manifest: Option<String>,
+    },
+    /// Invoke a registered agent. Reference: `<chain>/<agent_id>`.
+    Invoke {
+        reference: String,
+        /// JSON file forwarded as the agent's `input`.
+        #[arg(long)]
+        input: String,
+        /// EIP-3009 payment authorization (for x402-gated agents).
+        #[arg(long)]
+        x_payment: Option<String>,
+        /// Placeholder for client-side EIP-3009 signing (phase-6).
+        #[arg(long)]
+        auto_pay: bool,
+    },
+    /// Tail registry events for a chain (polls /api/v1/agents; SSE is TODO).
+    Watch {
+        chain: String,
+        /// Override the poll interval in seconds (default 10).
+        #[arg(long)]
+        interval: Option<u64>,
+        /// Stop after this many polls (test seam; default: never).
+        #[arg(long, hide = true)]
+        max_iters: Option<usize>,
+    },
+    /// MCP integrations: install client configs, generate Deno shims.
+    Mcp {
+        #[command(subcommand)]
+        action: McpAction,
+    },
+    /// Background worker visibility.
+    Workers {
+        #[command(subcommand)]
+        action: WorkersAction,
+    },
+    /// Wallet visibility (balance, spend, allowlist, kill switch).
+    Wallet {
+        #[command(subcommand)]
+        action: WalletAction,
+    },
+    /// Backfill the registry index from a given block to current head.
+    Backfill {
+        #[arg(long)]
+        chain: String,
+        #[arg(long = "from-block")]
+        from_block: u64,
+        /// Print what would be scanned without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -87,6 +145,32 @@ enum ManifestAction {
     Validate { path: String },
     /// POST a manifest file to `/api/v1/manifest/hash` and print sha256 + keccak256.
     Hash { path: String },
+}
+
+#[derive(Subcommand)]
+enum McpAction {
+    /// Write the eth-tools stanza into Claude Desktop / Cursor MCP configs.
+    Install,
+    /// Fetch an agent card by URL and emit a Deno TS MCP shim.
+    #[command(name = "from-card")]
+    FromCard {
+        url: String,
+        /// Output path for the generated TS file (default: ./mcp-<slug>.ts).
+        #[arg(long)]
+        out: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum WorkersAction {
+    /// Render the worker-status table from `/api/v1/workers/status`.
+    Status,
+}
+
+#[derive(Subcommand)]
+enum WalletAction {
+    /// Render wallet posture from `/api/v1/wallet/status`.
+    Status,
 }
 
 /// Replace the default panic hook with a redacted one-liner so a Rust panic
@@ -138,5 +222,45 @@ async fn main() -> anyhow::Result<()> {
             ManifestAction::Hash { path } => commands::manifest::hash(&ctx, &path).await,
         },
         Command::Health => commands::health::run(&ctx).await,
+        Command::Register {
+            interactive,
+            manifest,
+        } => match (interactive, manifest) {
+            (true, _) => commands::register::interactive(&ctx).await,
+            (false, Some(p)) => commands::register::from_file(&ctx, &p).await,
+            (false, None) => Err(anyhow::anyhow!(
+                "register: pass either --interactive or --manifest <path>"
+            )),
+        },
+        Command::Invoke {
+            reference,
+            input,
+            x_payment,
+            auto_pay,
+        } => {
+            commands::invoke::run(&ctx, &reference, &input, x_payment.as_deref(), auto_pay).await
+        }
+        Command::Watch {
+            chain,
+            interval,
+            max_iters,
+        } => commands::watch::run(&ctx, &chain, interval, max_iters).await,
+        Command::Mcp { action } => match action {
+            McpAction::Install => commands::mcp::install(&ctx).await,
+            McpAction::FromCard { url, out } => {
+                commands::mcp::from_card(&ctx, &url, out.as_deref()).await
+            }
+        },
+        Command::Workers { action } => match action {
+            WorkersAction::Status => commands::workers::status(&ctx).await,
+        },
+        Command::Wallet { action } => match action {
+            WalletAction::Status => commands::wallet::status(&ctx).await,
+        },
+        Command::Backfill {
+            chain,
+            from_block,
+            dry_run,
+        } => commands::backfill::run(&ctx, &chain, from_block, dry_run).await,
     }
 }
