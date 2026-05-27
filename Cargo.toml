@@ -49,6 +49,12 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 base64 = "0.22"
 url = "2"
 
+# Phase-5 API keys: bcrypt-hashed bearer tokens + CSPRNG for plaintext gen.
+# bcrypt 0.16 pinned per Phase-5 spec; cost=10 (~100ms) — wrap calls in
+# spawn_blocking so the tokio runtime isn't stalled.
+bcrypt = { version = "0.16", default-features = false, features = ["std"] }
+rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
+
 # MCP server (rmcp ≥ 1.x). schemars 1.0 is pinned to match rmcp 1.7's
 # internal `#[derive(JsonSchema)]` macro — mismatched majors produce opaque
 # trait-not-satisfied errors at compile time.

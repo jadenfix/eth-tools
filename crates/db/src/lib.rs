@@ -12,6 +12,7 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::time::Duration;
 
 pub mod agents;
+pub mod api_keys;
 pub mod chains_seed;
 pub mod cursors;
 pub mod feedback;

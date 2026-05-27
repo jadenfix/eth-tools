@@ -19,11 +19,15 @@ bigdecimal.workspace = true
 chrono.workspace = true
 base64.workspace = true
 thiserror.workspace = true
+bcrypt.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+uuid.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
 
 eth-tools-core.workspace = true
 eth-tools-db.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 testcontainers.workspace = true
 testcontainers-modules.workspace = true

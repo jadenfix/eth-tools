@@ -36,7 +36,7 @@ export default async function DashboardHome() {
             </li>
             <li>
               <Link href="/dashboard/keys" className="underline underline-offset-2">
-                API keys (coming soon)
+                API keys
               </Link>
             </li>
           </ul>
