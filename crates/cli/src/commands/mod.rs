@@ -14,12 +14,32 @@ pub struct Ctx {
     pub api_url: String,
     pub json: bool,
     pub paths: ConfigPaths,
+    /// Opt-in: open the browser at a non-default `--api-url` during `auth
+    /// login`. Without this, login refuses to navigate to an attacker-supplied
+    /// host that might phish for an API key. See `commands::auth::login`.
+    pub allow_untrusted_login: bool,
 }
 
 impl Ctx {
     /// Build a `Client`, threading in a saved token if present.
+    ///
+    /// If the loaded credentials carry an `api_url` field and it does not
+    /// match `self.api_url`, we emit a warning to stderr. This is intentionally
+    /// non-blocking: operators may legitimately switch staging↔prod against a
+    /// long-lived dev token.
     pub fn client(&self) -> Result<Client> {
-        let token = crate::config::load(&self.paths)?.map(|c| c.token);
+        let creds = crate::config::load(&self.paths)?;
+        let token = creds.map(|c| {
+            if let Some(creds_url) = c.api_url.as_deref() {
+                if creds_url != self.api_url {
+                    eprintln!(
+                        "WARN: token was minted for {creds_url}; sending to {}",
+                        self.api_url
+                    );
+                }
+            }
+            c.into_token()
+        });
         Client::new(self.api_url.clone(), token)
     }
 

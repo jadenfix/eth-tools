@@ -10,8 +10,48 @@ use anyhow::{anyhow, Context, Result};
 use reqwest::{header, Method, StatusCode};
 use serde::Deserialize;
 use serde_json::Value;
+use std::time::Duration;
 
 pub const DEFAULT_API_URL: &str = "https://eth-tools.dev";
+
+/// Validate that `raw` is a syntactically valid base URL the CLI is willing to
+/// talk to. Returns the parsed-and-normalized string on success.
+///
+/// Rules:
+///   * must parse with `url::Url`
+///   * scheme must be `https`, OR `http` against a loopback host
+///   * loopback = IPv4 `127.0.0.0/8`, IPv6 `::1`, or literal `localhost`
+pub fn validate_api_url(raw: &str) -> Result<String> {
+    let parsed =
+        url::Url::parse(raw).with_context(|| format!("invalid --api-url {raw:?}: not a valid URL"))?;
+    match parsed.scheme() {
+        "https" => {}
+        "http" => {
+            if !is_loopback_host(&parsed) {
+                return Err(anyhow!(
+                    "invalid --api-url {raw:?}: plaintext http:// is only \
+                     permitted for localhost (127.0.0.0/8, ::1, localhost); \
+                     refusing to send bearer tokens in the clear"
+                ));
+            }
+        }
+        other => {
+            return Err(anyhow!(
+                "invalid --api-url {raw:?}: unsupported scheme {other:?}; expected https"
+            ));
+        }
+    }
+    Ok(parsed.to_string().trim_end_matches('/').to_string())
+}
+
+fn is_loopback_host(u: &url::Url) -> bool {
+    match u.host() {
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
+        None => false,
+    }
+}
 
 /// Wire shape for API errors: `{ "error": { "code": ..., "evaluator": ..., "policy_version": ... } }`.
 #[derive(Debug, Deserialize)]
@@ -35,16 +75,21 @@ pub struct Client {
 
 impl Client {
     pub fn new(base: impl Into<String>, token: Option<String>) -> Result<Self> {
+        let base = validate_api_url(&base.into())?;
         let http = reqwest::Client::builder()
             .user_agent(concat!("eth-tools-cli/", env!("CARGO_PKG_VERSION")))
             .gzip(true)
+            // Bound every request: connect 10s, total 30s. Without these the
+            // CLI would hang forever on a stalled TCP handshake or slow body.
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            // Refuse redirects: the CLI talks JSON to a single base URL, and a
+            // same-host https→http redirect would silently downgrade the
+            // Authorization header onto the wire in plaintext.
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .context("build reqwest client")?;
-        Ok(Self {
-            base: base.into().trim_end_matches('/').to_string(),
-            token,
-            http,
-        })
+        Ok(Self { base, token, http })
     }
 
     pub fn base_url(&self) -> &str {
@@ -133,5 +178,54 @@ fn pretty_error(status: StatusCode, body: &str) -> String {
         format!("{status} (empty body)")
     } else {
         format!("{status}: {body}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_accepts_https() {
+        assert_eq!(
+            validate_api_url("https://eth-tools.dev").unwrap(),
+            "https://eth-tools.dev"
+        );
+        // Trailing slash is normalized off.
+        assert_eq!(
+            validate_api_url("https://eth-tools.dev/").unwrap(),
+            "https://eth-tools.dev"
+        );
+    }
+
+    #[test]
+    fn validate_accepts_http_localhost() {
+        for ok in [
+            "http://127.0.0.1:8080",
+            "http://localhost:3000",
+            "http://[::1]:8080",
+            "http://LOCALHOST",
+        ] {
+            assert!(validate_api_url(ok).is_ok(), "expected ok: {ok}");
+        }
+    }
+
+    #[test]
+    fn validate_rejects_http_remote() {
+        let err = validate_api_url("http://attacker.com").unwrap_err().to_string();
+        assert!(err.contains("plaintext http://"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn validate_rejects_weird_schemes() {
+        for bad in ["file:///etc/passwd", "javascript:alert(1)", "ftp://x"] {
+            assert!(validate_api_url(bad).is_err(), "expected reject: {bad}");
+        }
+    }
+
+    #[test]
+    fn validate_rejects_garbage() {
+        assert!(validate_api_url("not a url").is_err());
+        assert!(validate_api_url("").is_err());
     }
 }

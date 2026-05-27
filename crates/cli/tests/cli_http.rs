@@ -4,6 +4,7 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::json;
+use std::time::Duration;
 use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -217,6 +218,74 @@ async fn manifest_hash_prints_both_digests() {
         .stdout(predicate::str::contains("0xaaaa"))
         .stdout(predicate::str::contains("keccak256:"))
         .stdout(predicate::str::contains("0xbbbb"));
+}
+
+#[tokio::test]
+async fn request_times_out_when_server_stalls() {
+    // B1 guard: prove the 30s total timeout actually fires. Without
+    // `.timeout(...)` on the reqwest builder, this test would hang for the
+    // wiremock delay (60s) until the harness killed it.
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/health"))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(60)))
+        .mount(&server)
+        .await;
+
+    let start = std::time::Instant::now();
+    let out = cli(&server.uri())
+        .arg("health")
+        .timeout(Duration::from_secs(45))
+        .output()
+        .expect("run cli");
+    let elapsed = start.elapsed();
+    assert!(
+        !out.status.success(),
+        "health was supposed to time out, got success"
+    );
+    assert!(
+        elapsed < Duration::from_secs(40),
+        "client timeout should fire within ~30s, observed {elapsed:?}"
+    );
+}
+
+#[test]
+fn rejects_http_remote_api_url_at_parse_time() {
+    // Clap's `value_parser` runs against `--api-url`, the env var, and the
+    // default; passing a non-localhost http:// URL must fail BEFORE any
+    // network I/O so a bearer token can never leave the process in cleartext.
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let mut c = Command::cargo_bin("eth-tools").expect("binary built");
+    c.env("ETH_TOOLS_CONFIG_DIR", tmp.path())
+        // Don't let the developer's env spill `ETH_TOOLS_API_URL`.
+        .env_remove("ETH_TOOLS_API_URL");
+    std::mem::forget(tmp);
+    c.args(["--api-url", "http://example.com", "health"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("plaintext http://"));
+}
+
+#[test]
+fn accepts_http_localhost_url() {
+    // 127.0.0.1 is on the allow-list (this is what `cli_http.rs` itself relies
+    // on for the wiremock tests).
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let mut c = Command::cargo_bin("eth-tools").expect("binary built");
+    c.env("ETH_TOOLS_CONFIG_DIR", tmp.path());
+    std::mem::forget(tmp);
+    // We don't bring up a server here — just confirm clap accepted the URL.
+    // The network call will fail (port closed), but that failure proves we
+    // got past the parse-time check.
+    let out = c
+        .args(["--api-url", "http://127.0.0.1:1", "health"])
+        .output()
+        .expect("run cli");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !stderr.contains("plaintext http://"),
+        "http://127.0.0.1 must be accepted; got: {stderr}"
+    );
 }
 
 #[tokio::test]

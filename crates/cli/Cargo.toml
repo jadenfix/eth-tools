@@ -20,6 +20,8 @@ reqwest.workspace = true
 directories.workspace = true
 comfy-table.workspace = true
 webbrowser.workspace = true
+url.workspace = true
+rpassword = "7"
 
 [dev-dependencies]
 assert_cmd.workspace = true
