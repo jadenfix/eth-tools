@@ -1,14 +1,49 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────────────
+   eth-tools terminal theme — purple/black.
+   The whole product is agent-first; this skin is intentionally terminal-
+   like so the dashboard reads as one more machine surface, not a
+   marketing site. Palette: deep purple-black background, light purple
+   foreground, magenta-purple accents.
+   ─────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --term-bg:        #07030f;
+  --term-bg-soft:   #0d0518;
+  --term-panel:     #130821;
+  --term-panel-2:   #1a0c2d;
+  --term-border:    #3b1f5e;
+  --term-border-2:  #5b2f8c;
+  --term-fg:        #e9d5ff;
+  --term-fg-dim:    #b89be0;
+  --term-muted:     #7a5fa6;
+  --term-prompt:    #bb7dff;
+  --term-accent:    #c084fc;
+  --term-accent-2:  #d8b4fe;
+  --term-magenta:   #ff79c6;
+  --term-ok:        #86efac;
+  --term-warn:      #fcd34d;
+  --term-err:       #fda4af;
+  --term-glow:      rgba(192, 132, 252, 0.35);
+  --term-mono:
+    ui-monospace, "JetBrains Mono", "Geist Mono", "Cascadia Mono",
+    "SF Mono", "SFMono-Regular", Menlo, Monaco, "Andale Mono",
+    "DejaVu Sans Mono", monospace;
+}
+
 @layer base {
   html,
   body {
     margin: 0;
     padding: 0;
-    background-color: #0b0d10;
-    color: #e6e6e6;
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-      "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--term-bg);
+    color: var(--term-fg);
+    font-family: var(--term-mono);
+    font-feature-settings: "calt" 1, "ss01" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   *,
@@ -17,12 +52,205 @@
     box-sizing: border-box;
   }
 
-  a {
-    color: #6ea8fe;
-    text-decoration: none;
+  body {
+    background-image:
+      radial-gradient(circle at 12% 8%, rgba(168, 85, 247, 0.10) 0, transparent 38%),
+      radial-gradient(circle at 88% 92%, rgba(192, 132, 252, 0.07) 0, transparent 42%);
+    background-attachment: fixed;
   }
 
-  a:hover {
-    text-decoration: underline;
+  /* Faint horizontal scanlines — CRT flavor without straining the eyes. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(232, 213, 255, 0.018) 0px,
+      rgba(232, 213, 255, 0.018) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: overlay;
+    z-index: 1;
   }
+
+  a {
+    color: var(--term-accent);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--term-accent-2);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--term-prompt);
+  }
+
+  ::selection {
+    background: var(--term-prompt);
+    color: var(--term-bg);
+  }
+
+  /* Slim purple scrollbars. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--term-bg-soft);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--term-border);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--term-border-2);
+  }
+}
+
+/* ─── Terminal-window primitives ─────────────────────────────────────── */
+
+.term-window {
+  position: relative;
+  background: var(--term-panel);
+  border: 1px solid var(--term-border);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(192, 132, 252, 0.05),
+    0 20px 60px -20px rgba(168, 85, 247, 0.25),
+    0 0 60px -30px var(--term-glow);
+  overflow: hidden;
+}
+
+.term-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--term-panel-2);
+  border-bottom: 1px solid var(--term-border);
+  font-size: 0.7rem;
+  color: var(--term-muted);
+}
+
+.term-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.term-dot-r { background: #ff5f57; }
+.term-dot-y { background: #febc2e; }
+.term-dot-g { background: #28c840; }
+
+.term-body {
+  padding: 1rem 1.25rem;
+}
+
+.term-prompt {
+  color: var(--term-prompt);
+  user-select: none;
+}
+.term-prompt::before {
+  content: "$ ";
+}
+
+.term-prompt-bare {
+  color: var(--term-prompt);
+  user-select: none;
+}
+
+.term-output {
+  color: var(--term-fg-dim);
+}
+
+.term-comment {
+  color: var(--term-muted);
+}
+.term-comment::before {
+  content: "# ";
+}
+
+.term-cursor {
+  display: inline-block;
+  width: 0.55ch;
+  height: 1em;
+  vertical-align: text-bottom;
+  background: var(--term-prompt);
+  margin-left: 2px;
+  animation: term-blink 1.05s steps(2, start) infinite;
+}
+@keyframes term-blink {
+  to { background: transparent; }
+}
+
+.term-glow {
+  text-shadow: 0 0 8px var(--term-glow);
+}
+
+.term-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--term-border);
+  border-radius: 3px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--term-fg-dim);
+  background: rgba(59, 31, 94, 0.18);
+}
+
+.term-pill-ok    { color: var(--term-ok);  border-color: rgba(134, 239, 172, 0.4); }
+.term-pill-warn  { color: var(--term-warn); border-color: rgba(252, 211, 77, 0.4); }
+.term-pill-err   { color: var(--term-err);  border-color: rgba(253, 164, 175, 0.4); }
+.term-pill-acc   { color: var(--term-accent-2); border-color: rgba(192, 132, 252, 0.4); }
+
+.term-link {
+  color: var(--term-accent);
+  border-bottom: 1px dashed rgba(192, 132, 252, 0.4);
+}
+.term-link:hover {
+  color: var(--term-accent-2);
+  border-bottom-style: solid;
+  text-decoration: none;
+}
+
+.term-divider {
+  border: 0;
+  border-top: 1px dashed var(--term-border);
+  margin: 1rem 0;
+}
+
+/* For ASCII-art / box-drawing characters. Use system mono fallback so
+   box-drawing aligns even if the primary face is variable-width-ish. */
+.term-ascii {
+  font-family: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  white-space: pre;
+  line-height: 1.25;
+  color: var(--term-fg-dim);
+}
+
+/* Status indicators — small inline dots. */
+.term-led {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-right: 0.4rem;
+  vertical-align: 0.05em;
+  box-shadow: 0 0 8px currentColor;
+}
+.term-led-ok   { background: var(--term-ok);   color: var(--term-ok); }
+.term-led-warn { background: var(--term-warn); color: var(--term-warn); }
+.term-led-err  { background: var(--term-err);  color: var(--term-err); }
+.term-led-idle { background: var(--term-muted); color: var(--term-muted); box-shadow: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .term-cursor {
+    animation: none;
+    background: var(--term-prompt);
+  }
+  body::before { display: none; }
 }

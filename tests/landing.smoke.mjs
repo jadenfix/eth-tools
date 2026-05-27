@@ -4,13 +4,12 @@
 // Playwright + browser binaries run ~300 MB. Instead we run a copy-and-shape
 // smoke over the source files. This catches:
 //
-//   - Removal/regression of the required hero copy.
+//   - Removal/regression of the required hero copy and aesthetic primitives.
 //   - Missing CTAs, missing footer links, missing tab labels.
 //   - Featured-agents fixture drifting away from the shape `page.tsx` expects.
+//   - README / AGENTS.md / IDE-rule drift from the agent-first messaging.
 //
-// It does NOT catch runtime rendering bugs. A render-time smoke can be added
-// once we wire `react-dom/server` against the App-Router server-component
-// boundary (non-trivial without `next test`).
+// It does NOT catch runtime rendering bugs.
 
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
@@ -23,53 +22,73 @@ const root = path.resolve(here, '..');
 
 const read = (rel) => readFile(path.join(root, rel), 'utf8');
 
-test('landing hero contains the required headline + subhead', async () => {
+test('landing hero contains the required headline + agent-first framing', async () => {
   const src = await read('app/page.tsx');
   assert.match(src, /The self-maintaining runtime for ERC-8004 agents/);
-  assert.match(src, /Discoverable, validated, live, paid — and maintained by other agents\./);
+  // Agent-first framing — three machine surfaces + maintained-by-agents claim
+  assert.match(src, /Maintained by other agents/i);
+  assert.match(src, /Three machine surfaces/i);
 });
 
-test('landing hero exposes both primary CTAs', async () => {
+test('landing carries the terminal aesthetic primitives', async () => {
   const src = await read('app/page.tsx');
-  assert.match(src, /Get an API key/);
-  assert.match(src, /href=["']\/dashboard\/keys["']/);
-  assert.match(src, /View the docs/);
+  // The visual theme is a hard requirement, not a default. Every page must
+  // build with the term-* primitives.
+  assert.match(src, /term-window/);
+  assert.match(src, /term-titlebar/);
+  assert.match(src, /term-prompt-bare/);
+  assert.match(src, /term-cursor/);
+});
+
+test('landing exposes machine-surface navigation', async () => {
+  const src = await read('app/page.tsx');
+  // No more big marketing CTA buttons — the page is terminal-style with
+  // a top nav of agent-discoverable surfaces.
   assert.match(src, /href=["']\/docs["']/);
+  assert.match(src, /href=["']\/openapi\.json["']/);
+  assert.match(src, /href=["']\/llms\.txt["']/);
+  assert.match(src, /href=["']\/dashboard["']/);
 });
 
 test('live counters component fetches /api/v1/health', async () => {
   const src = await read('app/_landing/LiveCounters.tsx');
   assert.match(src, /\/api\/v1\/health/);
-  assert.match(src, /agents indexed/);
-  assert.match(src, /manifests validated in last 24h/);
-  assert.match(src, /seconds since last on-chain event/);
+  // Terminal-styled labels — uppercase, underscored, no marketing copy.
+  // STATUS · AGENTS · CHAINS · WORKERS · MANIFESTS/24h · LAST EVENT.
+  assert.match(src, /label="AGENTS"/);
+  assert.match(src, /label="CHAINS"/);
+  assert.match(src, /label="MANIFESTS\/24h"/);
+  assert.match(src, /label="LAST EVENT"/);
+  assert.match(src, /indexed/i);
 });
 
-test('try-it section exposes curl, npx, and add-to-claude tabs', async () => {
+test('try-it section exposes curl, npx, claude, and cursor surfaces', async () => {
   const src = await read('app/_landing/TryIt.tsx');
-  assert.match(src, /curl https:\/\/eth-tools\.dev\/api\/v1\/agents \| jq/);
+  assert.match(src, /curl[^\n]*https:\/\/eth-tools\.dev\/api\/v1\/agents/);
   assert.match(src, /npx -y eth-tools find "wallet risk"/);
-  assert.match(src, /Add to Claude/);
+  assert.match(src, /add to claude/i);
+  assert.match(src, /add to cursor/i);
   assert.match(src, /claude_desktop_config\.json/);
+  assert.match(src, /\.cursor\/mcp\.json/);
   assert.match(src, /"mcpServers"/);
 });
 
-test('what-it-is section names all three product surfaces', async () => {
+test('landing names all three product surfaces and the wallet rails', async () => {
   const src = await read('app/page.tsx');
-  assert.match(src, /Registry indexer/);
-  assert.match(src, /MCP server/);
-  assert.match(src, /Paid-write relay/);
-  assert.match(src, /5 hard rails/);
+  assert.match(src, /registry indexer/i);
+  assert.match(src, /MCP server/i);
+  assert.match(src, /paid-write relay/i);
+  // Five hard rails are the agent-first security spine.
+  // `\s+` not literal space — JSX wraps long lines on whitespace boundaries.
+  assert.match(src, /five hard\s+rails/i);
 });
 
-test('footer carries all required links', async () => {
+test('footer carries the agent-discoverable links', async () => {
   const src = await read('app/page.tsx');
   for (const pattern of [
     /github\.com\/jadenfix\/eth-tools/,
-    /href=["']\/docs["']/,
     /href=["']\/dashboard\/workers["']/,
     /twitter\.com\/eth_tools/i,
-    /discord/i,
   ]) {
     assert.match(src, pattern);
   }
@@ -88,34 +107,73 @@ test('well-known-agents fixture matches the landing-page schema', async () => {
   }
 });
 
-test('README quickstart covers all three surfaces', async () => {
+test('README quickstart covers all three surfaces + what-it-isn\'t', async () => {
   const src = await read('README.md');
-  assert.match(src, /curl https:\/\/eth-tools\.dev\/api\/v1\/agents/);
+  assert.match(src, /curl[^\n]*https:\/\/eth-tools\.dev\/api\/v1\/agents/);
   assert.match(src, /npx -y eth-tools/);
   assert.match(src, /mcpServers/);
+  assert.match(src, /agent-first/i);
   assert.match(src, /Not a new payment standard/);
   assert.match(src, /Not a UI fork/);
-  assert.match(src, /Not a TEE/);
+  assert.match(src, /Not TEE/);
 });
 
-test('AGENTS.md documents the hot path and the three how-tos', async () => {
+test('AGENTS.md documents the hot path, the how-tos, and the don\'ts', async () => {
   const src = await read('AGENTS.md');
   assert.match(src, /## The hot path/);
   assert.match(src, /## How to add a new HTTP endpoint/);
   assert.match(src, /## How to add a new MCP tool/);
+  assert.match(src, /## How to add a new cron worker/);
+  assert.match(src, /## How to add a dashboard page/);
   assert.match(src, /## How to run tests/);
   assert.match(src, /cargo test --workspace/);
   assert.match(src, /Don't log secrets/);
+  // Agent-first framing — the dashboard is one more machine surface.
+  assert.match(src, /agent-first/i);
+  assert.match(src, /terminal/i);
 });
 
-test('IDE rules carry the same context as AGENTS.md', async () => {
+test('IDE rules carry the hot-path context and the wallet-rails don\'t', async () => {
   const claude = await read('.claude/commands/eth-tools.md');
   const cursor = await read('.cursor/rules/eth-tools.mdc');
   for (const src of [claude, cursor]) {
     assert.match(src, /## Hot path/);
     assert.match(src, /## How to add a new HTTP endpoint/);
     assert.match(src, /## How to add a new MCP tool/);
+    assert.match(src, /## How to add a new cron worker/);
     assert.match(src, /## How to run tests/);
-    assert.match(src, /wallet rails/);
+    assert.match(src, /wallet rails/i);
+    assert.match(src, /terminal/i);
   }
+});
+
+test('llms.txt enumerates the HTTP + MCP + CLI surfaces', async () => {
+  const src = await read('app/llms.txt/route.ts');
+  assert.match(src, /\/api\/v1\/agents/);
+  assert.match(src, /\/api\/mcp/);
+  assert.match(src, /npx -y eth-tools/);
+  assert.match(src, /oauth-protected-resource/);
+  assert.match(src, /llmstxt\.org/);
+});
+
+test('.well-known/eth-tools.json declares the surfaces and contracts', async () => {
+  const src = await read('app/.well-known/eth-tools.json/route.ts');
+  assert.match(src, /surfaces:/);
+  // Tools split into shipped vs planned so agents that crawl the manifest
+  // never see method-not-found for surfaces we advertise.
+  assert.match(src, /tools_available/);
+  assert.match(src, /tools_planned/);
+  assert.match(src, /0x8004A169/);
+  assert.match(src, /0x8004BAa1/);
+  assert.match(src, /0x8004Cc84/);
+});
+
+test('docs page indexes the machine surfaces and topics', async () => {
+  const src = await read('app/docs/page.tsx');
+  assert.match(src, /\/api\/v1\/health/);
+  assert.match(src, /\/api\/mcp/);
+  assert.match(src, /\/openapi\.json/);
+  assert.match(src, /\/llms\.txt/);
+  assert.match(src, /oauth-protected-resource/);
+  assert.match(src, /eth-tools manifest/);
 });

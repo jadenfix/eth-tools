@@ -1,12 +1,8 @@
 'use client';
 
-// Live counters strip — fetches `/api/v1/health` on the client.
-//
-// The health endpoint currently returns `{status, version, agents_indexed, chains[]}`.
-// It does NOT yet surface "manifests validated in last 24h" or
-// "seconds since last on-chain event" — those metrics are queued for a later
-// phase. Until they land we render an em-dash with a `tbd` label so we don't
-// fabricate numbers on the landing page.
+// Live counters — terminal "ps aux"-style status table fed by /api/v1/health.
+// agents_indexed + chains are real; the two later metrics are tbd and render
+// as em-dash with a "tbd" pill so we don't fabricate.
 
 import { useEffect, useState } from 'react';
 
@@ -50,53 +46,92 @@ export default function LiveCounters() {
     };
   }, []);
 
+  const ledClass =
+    state.kind === 'ok'
+      ? 'term-led term-led-ok'
+      : state.kind === 'loading'
+        ? 'term-led term-led-idle'
+        : 'term-led term-led-err';
+
+  const statusText =
+    state.kind === 'ok' ? `ok · v${state.health.version}` : state.kind === 'loading' ? 'querying…' : 'unreachable';
+
   const agentsText =
     state.kind === 'ok' ? state.health.agents_indexed.toLocaleString() : state.kind === 'loading' ? '…' : '—';
-  const chainsText =
+
+  const chains =
     state.kind === 'ok'
-      ? state.health.chains.filter((c) => c.agents_indexed > 0).length.toString()
-      : state.kind === 'loading'
-        ? '…'
-        : '—';
+      ? state.health.chains
+          .filter((c) => c.agents_indexed > 0)
+          .map((c) => `${c.name}(${c.agents_indexed})`)
+          .join(' · ')
+      : '—';
+
+  const chainsCount =
+    state.kind === 'ok' ? state.health.chains.filter((c) => c.agents_indexed > 0).length : 0;
 
   return (
     <section
       aria-label="Live runtime counters"
       data-testid="live-counters"
-      className="border-y border-zinc-800/80 bg-zinc-950/40"
+      className="mt-8 term-window"
     >
-      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-6 py-8 sm:grid-cols-3">
-        <Counter
-          value={agentsText}
-          label={`${
-            state.kind === 'ok' ? `agents indexed across ${chainsText} chains` : 'agents indexed'
-          }`}
-        />
-        <Counter
-          value="—"
-          label="manifests validated in last 24h"
-          hint="tbd"
-        />
-        <Counter
-          value="—"
-          label="seconds since last on-chain event"
-          hint="tbd"
-        />
+      <div className="term-titlebar">
+        <span className="term-dot term-dot-r" aria-hidden="true" />
+        <span className="term-dot term-dot-y" aria-hidden="true" />
+        <span className="term-dot term-dot-g" aria-hidden="true" />
+        <span className="ml-3">tail -f /var/log/eth-tools/runtime.log</span>
+      </div>
+      <div className="term-body text-sm">
+        <p>
+          <span className="term-prompt-bare">$</span>{' '}
+          <span style={{ color: 'var(--term-fg)' }}>
+            curl -s eth-tools.dev/api/v1/health | jq
+          </span>
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+          <Row label="STATUS">
+            <span className={ledClass} aria-hidden="true" />
+            <span style={{ color: 'var(--term-fg)' }}>{statusText}</span>
+          </Row>
+          <Row label="AGENTS">
+            <span style={{ color: 'var(--term-accent-2)' }}>{agentsText}</span>{' '}
+            <span style={{ color: 'var(--term-muted)' }}>
+              indexed{state.kind === 'ok' ? ` · ${chainsCount} chain${chainsCount === 1 ? '' : 's'}` : ''}
+            </span>
+          </Row>
+          <Row label="CHAINS">
+            <span style={{ color: 'var(--term-fg-dim)' }}>{chains}</span>
+          </Row>
+          <Row label="WORKERS">
+            <span className="term-pill" title="exposed at /dashboard/workers">
+              8 cron · see /dashboard/workers
+            </span>
+          </Row>
+          <Row label="MANIFESTS/24h">
+            <span style={{ color: 'var(--term-muted)' }}>—</span>{' '}
+            <span className="term-pill">tbd</span>
+          </Row>
+          <Row label="LAST EVENT">
+            <span style={{ color: 'var(--term-muted)' }}>—</span>{' '}
+            <span className="term-pill">tbd</span>
+          </Row>
+        </div>
       </div>
     </section>
   );
 }
 
-function Counter({ value, label, hint }: { value: string; label: string; hint?: string }) {
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="text-center sm:text-left">
-      <div className="font-mono text-3xl font-semibold tracking-tight text-zinc-50">
-        {value}
-      </div>
-      <div className="mt-1 text-xs uppercase tracking-wider text-zinc-500">
+    <div className="flex items-baseline gap-3">
+      <span
+        className="inline-block w-32 shrink-0 text-xs uppercase tracking-[0.12em]"
+        style={{ color: 'var(--term-muted)' }}
+      >
         {label}
-        {hint ? <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">{hint}</span> : null}
-      </div>
+      </span>
+      <span className="text-sm">{children}</span>
     </div>
   );
 }

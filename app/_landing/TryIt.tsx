@@ -1,31 +1,35 @@
 'use client';
 
-// Try-it-in-30-seconds section. Three tabs:
-//   curl   — read-side smoke against the public REST API.
-//   npx    — the published CLI (lands with the cli phase).
-//   claude — opens a modal with paste-ready MCP JSON.
-//
-// The MCP JSON is the same shape Claude Desktop / Code reads from
-// `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
-// or `~/.config/Claude/claude_desktop_config.json` (Linux). We render the
-// JSON verbatim so users can copy-paste without templating.
+// Try-it terminal — four tabs: curl, npx, claude, cursor.
+// MCP-config snippets are rendered verbatim so users copy-paste cleanly.
 
 import { useEffect, useState } from 'react';
 
-type Tab = 'curl' | 'npx' | 'claude';
+type Tab = 'curl' | 'npx' | 'claude' | 'cursor';
 
-const SNIPPETS: Record<Exclude<Tab, 'claude'>, string> = {
-  curl: 'curl https://eth-tools.dev/api/v1/agents | jq',
+const SNIPPETS: Record<Exclude<Tab, 'claude' | 'cursor'>, string> = {
+  curl: 'curl -s https://eth-tools.dev/api/v1/agents | jq',
   npx: 'npx -y eth-tools find "wallet risk"',
 };
 
-const MCP_CONFIG = `{
+const CLAUDE_CONFIG = `{
   "mcpServers": {
     "eth-tools": {
       "command": "npx",
       "args": ["-y", "eth-tools", "mcp"],
       "env": {
         "ETH_TOOLS_API_KEY": "<paste your key from /dashboard/keys>"
+      }
+    }
+  }
+}`;
+
+const CURSOR_CONFIG = `{
+  "mcpServers": {
+    "eth-tools": {
+      "url": "https://eth-tools.dev/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <paste your key from /dashboard/keys>"
       }
     }
   }
@@ -45,66 +49,115 @@ export default function TryIt() {
     return () => window.removeEventListener('keydown', onKey);
   }, [modalOpen]);
 
-  const openClaude = () => {
-    setTab('claude');
+  const openModal = (target: 'claude' | 'cursor') => {
+    setTab(target);
     setModalOpen(true);
   };
 
-  const copyMcp = async () => {
+  const modalConfig = tab === 'cursor' ? CURSOR_CONFIG : CLAUDE_CONFIG;
+  const modalTarget = tab === 'cursor' ? 'Cursor' : 'Claude';
+  const modalPath =
+    tab === 'cursor'
+      ? '~/.cursor/mcp.json (or per-project .cursor/mcp.json)'
+      : '~/Library/Application Support/Claude/claude_desktop_config.json';
+
+  const copy = async () => {
     try {
-      await navigator.clipboard.writeText(MCP_CONFIG);
+      await navigator.clipboard.writeText(modalConfig);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard API can fail in non-secure contexts; user falls back to
-      // manual select-all + copy. No need to surface an error.
+      // Clipboard API can fail in non-secure contexts; user select-copies manually.
     }
   };
 
   return (
-    <section aria-labelledby="try-it-heading" className="mx-auto max-w-3xl px-6 py-16">
-      <h2 id="try-it-heading" className="text-2xl font-semibold tracking-tight">
-        Try it in 30 seconds
-      </h2>
-      <div
-        role="tablist"
-        aria-label="Try it"
-        className="mt-6 inline-flex rounded-lg border border-zinc-800 bg-zinc-900/40 p-1 text-sm"
-      >
-        <TabButton current={tab} value="curl" onSelect={setTab}>curl</TabButton>
-        <TabButton current={tab} value="npx" onSelect={setTab}>npx eth-tools</TabButton>
-        <TabButton current={tab} value="claude" onSelect={openClaude}>Add to Claude</TabButton>
+    <section aria-labelledby="try-it-heading" className="mt-12 term-window">
+      <div className="term-titlebar">
+        <span className="term-dot term-dot-r" aria-hidden="true" />
+        <span className="term-dot term-dot-y" aria-hidden="true" />
+        <span className="term-dot term-dot-g" aria-hidden="true" />
+        <span className="ml-3">try-it — 30 seconds — pick a surface</span>
       </div>
+      <div className="term-body">
+        <h2 id="try-it-heading" className="sr-only">
+          Try it in 30 seconds
+        </h2>
 
-      <div className="mt-4">
-        {tab === 'claude' ? (
-          <div
-            role="tabpanel"
-            aria-labelledby="tab-claude"
-            data-testid="tab-panel-claude"
-            className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-400"
-          >
-            Click <strong className="text-zinc-200">Add to Claude</strong> above to open the
-            MCP config snippet.{' '}
-            <button
-              type="button"
-              onClick={openClaude}
-              className="underline underline-offset-2 hover:text-zinc-200"
+        <div
+          role="tablist"
+          aria-label="Try it"
+          className="flex flex-wrap gap-1 border-b pb-2 text-xs"
+          style={{ borderColor: 'var(--term-border)' }}
+        >
+          <TabButton current={tab} value="curl" onSelect={setTab}>
+            $ curl
+          </TabButton>
+          <TabButton current={tab} value="npx" onSelect={setTab}>
+            $ npx eth-tools
+          </TabButton>
+          <TabButton current={tab} value="claude" onSelect={() => openModal('claude')}>
+            ▸ add to claude
+          </TabButton>
+          <TabButton current={tab} value="cursor" onSelect={() => openModal('cursor')}>
+            ▸ add to cursor
+          </TabButton>
+        </div>
+
+        <div className="mt-4">
+          {tab === 'claude' || tab === 'cursor' ? (
+            <div
+              role="tabpanel"
+              aria-labelledby={`tab-${tab}`}
+              data-testid={`tab-panel-${tab}`}
+              className="text-sm"
+              style={{ color: 'var(--term-fg-dim)' }}
             >
-              Reopen the modal
-            </button>
-            .
-          </div>
-        ) : (
-          <pre
-            role="tabpanel"
-            aria-labelledby={`tab-${tab}`}
-            data-testid={`tab-panel-${tab}`}
-            className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-sm text-zinc-200"
-          >
-            <code>{SNIPPETS[tab]}</code>
-          </pre>
-        )}
+              <p>
+                <span className="term-prompt-bare">$</span>{' '}
+                <span style={{ color: 'var(--term-fg)' }}>
+                  open mcp.json — paste config
+                </span>
+              </p>
+              <p className="mt-2">
+                Click <strong style={{ color: 'var(--term-accent-2)' }}>▸ add to {tab}</strong>{' '}
+                above to open the MCP config snippet.{' '}
+                <button
+                  type="button"
+                  onClick={() => openModal(tab)}
+                  className="term-link"
+                >
+                  Reopen the modal
+                </button>
+                .
+              </p>
+            </div>
+          ) : (
+            <pre
+              role="tabpanel"
+              aria-labelledby={`tab-${tab}`}
+              data-testid={`tab-panel-${tab}`}
+              className="overflow-x-auto rounded-md px-4 py-3 text-sm"
+              style={{
+                background: 'var(--term-bg)',
+                border: '1px solid var(--term-border)',
+                color: 'var(--term-fg)',
+              }}
+            >
+              <code>
+                <span className="term-prompt-bare">$</span> {SNIPPETS[tab]}
+              </code>
+            </pre>
+          )}
+        </div>
+
+        <p className="mt-3 text-xs" style={{ color: 'var(--term-muted)' }}>
+          # Anonymous reads are rate-limited; sign in at{' '}
+          <a href="/dashboard/keys" className="term-link">
+            /dashboard/keys
+          </a>{' '}
+          to issue an API key (write surfaces require one).
+        </p>
       </div>
 
       {modalOpen ? (
@@ -113,55 +166,71 @@ export default function TryIt() {
           aria-modal="true"
           aria-labelledby="mcp-modal-title"
           data-testid="mcp-modal"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4"
           onClick={() => setModalOpen(false)}
         >
           <div
-            className="w-full max-w-xl rounded-xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="term-window w-full max-w-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 id="mcp-modal-title" className="text-lg font-semibold">
-                  Add eth-tools to Claude
-                </h3>
-                <p className="mt-1 text-sm text-zinc-400">
-                  Paste this into your Claude Desktop MCP config (
-                  <code className="rounded bg-zinc-900 px-1 py-0.5 text-xs">
-                    ~/Library/Application Support/Claude/claude_desktop_config.json
-                  </code>
-                  ) and restart Claude.
-                </p>
-              </div>
+            <div className="term-titlebar">
+              <span className="term-dot term-dot-r" aria-hidden="true" />
+              <span className="term-dot term-dot-y" aria-hidden="true" />
+              <span className="term-dot term-dot-g" aria-hidden="true" />
+              <span className="ml-3">add eth-tools to {modalTarget}</span>
               <button
                 type="button"
                 aria-label="Close"
                 onClick={() => setModalOpen(false)}
-                className="rounded-md p-1 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+                className="ml-auto rounded p-1"
+                style={{ color: 'var(--term-muted)' }}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
+                ✕
               </button>
             </div>
-            <pre className="mt-4 max-h-80 overflow-auto rounded-lg border border-zinc-800 bg-black px-4 py-3 font-mono text-xs text-zinc-200">
-              <code>{MCP_CONFIG}</code>
-            </pre>
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={copyMcp}
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm hover:bg-zinc-800"
+            <div className="term-body">
+              <h3 id="mcp-modal-title" className="sr-only">
+                Add eth-tools to {modalTarget}
+              </h3>
+              <p className="text-xs" style={{ color: 'var(--term-fg-dim)' }}>
+                <span className="term-prompt-bare">$</span> $EDITOR{' '}
+                <code style={{ color: 'var(--term-accent-2)' }}>{modalPath}</code>
+              </p>
+              <pre
+                className="mt-3 max-h-80 overflow-auto rounded-md px-4 py-3 text-xs"
+                style={{
+                  background: 'var(--term-bg)',
+                  border: '1px solid var(--term-border)',
+                  color: 'var(--term-fg)',
+                }}
               >
-                {copied ? 'Copied' : 'Copy JSON'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white"
-              >
-                Done
-              </button>
+                <code>{modalConfig}</code>
+              </pre>
+              <div className="mt-4 flex items-center justify-end gap-2 text-sm">
+                <button
+                  type="button"
+                  onClick={copy}
+                  className="rounded-md px-3 py-1.5"
+                  style={{
+                    border: '1px solid var(--term-border-2)',
+                    color: 'var(--term-accent-2)',
+                  }}
+                >
+                  {copied ? '✓ copied' : 'copy json'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-md px-3 py-1.5"
+                  style={{
+                    background: 'var(--term-prompt)',
+                    color: 'var(--term-bg)',
+                    fontWeight: 600,
+                  }}
+                >
+                  done
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -189,10 +258,14 @@ function TabButton({
       role="tab"
       aria-selected={active}
       onClick={() => onSelect(value)}
-      className={
-        'rounded-md px-3 py-1.5 transition-colors ' +
-        (active ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-300 hover:bg-zinc-800/60')
-      }
+      className="rounded-t-md px-3 py-1.5 transition-colors"
+      style={{
+        background: active ? 'var(--term-bg)' : 'transparent',
+        color: active ? 'var(--term-accent-2)' : 'var(--term-fg-dim)',
+        borderTop: active ? '1px solid var(--term-border-2)' : '1px solid transparent',
+        borderLeft: active ? '1px solid var(--term-border-2)' : '1px solid transparent',
+        borderRight: active ? '1px solid var(--term-border-2)' : '1px solid transparent',
+      }}
     >
       {children}
     </button>

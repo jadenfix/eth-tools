@@ -1,6 +1,7 @@
 // Server component — receives the hand-curated agent list from
-// `fixtures/well-known-agents.json` via props. Horizontal scroll is pure CSS
-// (overflow-x-auto + snap), so no JS shipped for this section.
+// `fixtures/well-known-agents.json` via props. Rendered as an `ls -la`
+// style listing inside a terminal window, with each agent on its own
+// row plus inline manifest / website links.
 
 import Link from 'next/link';
 import { safeExternalHref } from '@/lib/rust';
@@ -19,65 +20,87 @@ export default function FeaturedAgents({ agents }: { agents: FeaturedAgent[] }) 
     return null;
   }
   return (
-    <section aria-labelledby="featured-heading" className="mx-auto max-w-6xl px-6 py-16">
-      <div className="flex items-baseline justify-between">
-        <h2 id="featured-heading" className="text-2xl font-semibold tracking-tight">
+    <section aria-labelledby="featured-heading" className="mt-12 term-window">
+      <div className="term-titlebar">
+        <span className="term-dot term-dot-r" aria-hidden="true" />
+        <span className="term-dot term-dot-y" aria-hidden="true" />
+        <span className="term-dot term-dot-g" aria-hidden="true" />
+        <span className="ml-3">ls -la /agents/featured</span>
+      </div>
+      <div className="term-body">
+        <div className="flex items-baseline justify-between">
+          <p className="text-sm">
+            <span className="term-prompt-bare">$</span>{' '}
+            <span style={{ color: 'var(--term-fg)' }}>ls -la /agents/featured</span>
+          </p>
+          <Link
+            href="/dashboard/agents"
+            className="term-link text-xs"
+          >
+            see-all →
+          </Link>
+        </div>
+        <h2 id="featured-heading" className="sr-only">
           Featured agents
         </h2>
-        <Link
-          href="/dashboard/agents"
-          className="text-sm text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
+        <p className="mt-2 text-xs" style={{ color: 'var(--term-muted)' }}>
+          # total {agents.length} · hand-curated · replaced before public launch
+        </p>
+
+        <ul
+          role="list"
+          data-testid="featured-agents"
+          className="mt-3 divide-y text-sm"
+          style={{ borderColor: 'var(--term-border)' }}
         >
-          See all →
-        </Link>
+          {agents.map((a) => {
+            const manifestHref = safeExternalHref(a.manifestUrl);
+            const websiteHref = safeExternalHref(a.websiteUrl ?? null);
+            return (
+              <li
+                key={`${a.chain}/${a.agentId}`}
+                className="py-3"
+                style={{ borderColor: 'var(--term-border)' }}
+              >
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="term-pill term-pill-acc">{a.chain}</span>
+                  <span style={{ color: 'var(--term-muted)' }}>#</span>
+                  <span style={{ color: 'var(--term-accent-2)' }}>{a.agentId}</span>
+                  <span style={{ color: 'var(--term-fg)' }}>{a.label}</span>
+                  <span className="ml-auto flex gap-3 text-xs">
+                    {manifestHref ? (
+                      <a
+                        href={manifestHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="term-link"
+                      >
+                        manifest
+                      </a>
+                    ) : null}
+                    {websiteHref ? (
+                      <a
+                        href={websiteHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="term-link"
+                      >
+                        website
+                      </a>
+                    ) : null}
+                  </span>
+                </div>
+                <p
+                  className="mt-1 line-clamp-2 text-xs"
+                  style={{ color: 'var(--term-fg-dim)' }}
+                >
+                  {a.description}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
       </div>
-      <ul
-        role="list"
-        data-testid="featured-agents"
-        className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2"
-      >
-        {agents.map((a) => {
-          const manifestHref = safeExternalHref(a.manifestUrl);
-          const websiteHref = safeExternalHref(a.websiteUrl ?? null);
-          return (
-            <li
-              key={`${a.chain}/${a.agentId}`}
-              className="min-w-[280px] max-w-[320px] flex-shrink-0 snap-start rounded-xl border border-zinc-800 bg-zinc-900/40 p-5"
-            >
-              <div className="flex items-center justify-between text-xs">
-                <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-zinc-300">
-                  {a.chain}
-                </span>
-                <span className="font-mono text-zinc-500">#{a.agentId}</span>
-              </div>
-              <h3 className="mt-3 text-base font-medium text-zinc-100">{a.label}</h3>
-              <p className="mt-1 line-clamp-3 text-sm text-zinc-400">{a.description}</p>
-              <div className="mt-4 flex gap-3 text-xs">
-                {manifestHref ? (
-                  <a
-                    href={manifestHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-zinc-300 underline-offset-2 hover:underline"
-                  >
-                    manifest
-                  </a>
-                ) : null}
-                {websiteHref ? (
-                  <a
-                    href={websiteHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-zinc-300 underline-offset-2 hover:underline"
-                  >
-                    website
-                  </a>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
     </section>
   );
 }
