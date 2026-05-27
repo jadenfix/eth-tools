@@ -248,18 +248,21 @@ async fn w4_reputation_aggregator_e2e() {
     );
 
     // ----- Phase 3: revoke now matches (existing feedback) ---------------
+    // Advance head + cursors so we get a fresh window.
+    let head2 = genesis + 400;
+    let target2 = head2 - REORG_SAFETY_BLOCKS;
+    // Place the matching revoke inside the new scan window (target, target2]
+    // — a real RPC would never have returned a block outside the request
+    // range, and the mock doesn't filter for us.
     let fr_log_match = feedback_revoked_log(
         rep_addr(),
         agent_a,
         client_a,
         1,
-        target - 4,
+        target + 5,
         0,
         tx1,
     );
-    // Advance head + cursors so we get a fresh window.
-    let head2 = genesis + 400;
-    let target2 = head2 - REORG_SAFETY_BLOCKS;
     {
         let mut conn = pool.acquire().await.unwrap();
         for topic in [
