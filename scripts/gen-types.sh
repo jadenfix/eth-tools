@@ -5,6 +5,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-mkdir -p app/lib
-cargo run --quiet -p eth-tools-openapi-gen > app/openapi.json
-pnpm exec openapi-typescript app/openapi.json --output app/lib/api-types.ts
+mkdir -p app/lib public
+cargo run --quiet -p eth-tools-openapi-gen > public/openapi.json
+pnpm exec openapi-typescript public/openapi.json --output app/lib/api-types.ts

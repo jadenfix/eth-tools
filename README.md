@@ -108,7 +108,7 @@ The MCP server is mounted at `https://eth-tools.dev/api/mcp`. Auth is a bearer t
 | `crates/payments` | x402 facilitator client + env-var wallet with the 5 hard rails |
 | `crates/cli`      | `eth-tools` binary (clap) |
 | `crates/dev-server` | Local-only Axum binary mounting prod handlers on `:3000` |
-| `crates/openapi-gen` | Build-time tool — emits `app/openapi.json` |
+| `crates/openapi-gen` | Build-time tool — emits `public/openapi.json` |
 | `api/v1/index.rs` | Catch-all REST function (Vercel rewrites `/api/v1/*` → here) |
 | `api/mcp/index.rs` | Catch-all MCP function (Vercel rewrites `/api/mcp/*` → here) |
 | `api/cron/*.rs`   | 8 cron entrypoints (paths static — Vercel cron requires it) |
@@ -146,8 +146,8 @@ Open `http://localhost:3001` for the terminal-skinned landing. `vercel dev` is *
 
 | Script | What it does |
 |---|---|
-| `pnpm gen:openapi` | Re-emits `app/openapi.json` from `crates/openapi-gen` |
-| `pnpm gen:types`   | Re-emits `app/lib/api-types.ts` from `app/openapi.json` (CI gates on `git diff --exit-code`) |
+| `pnpm gen:openapi` | Re-emits `public/openapi.json` from `crates/openapi-gen` |
+| `pnpm gen:types`   | Re-emits `app/lib/api-types.ts` from `public/openapi.json` (CI gates on `git diff --exit-code`) |
 | `pnpm typecheck`   | TypeScript check across the dashboard |
 | `cargo test --workspace` | Rust unit + integration tests |
 | `cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings` | Pre-commit hygiene |

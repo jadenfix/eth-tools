@@ -14,9 +14,9 @@
     "test": "node --test tests/*.mjs",
     "lint": "next lint",
     "format": "prettier --write \"app/**/*.{ts,tsx,js,jsx,json,md}\"",
-    "gen:openapi": "cargo run --quiet -p eth-tools-openapi-gen > app/openapi.json",
+    "gen:openapi": "cargo run --quiet -p eth-tools-openapi-gen > public/openapi.json",
     "gen:types": "bash scripts/gen-types.sh",
-    "gen:check": "bash scripts/gen-types.sh && git diff --exit-code app/openapi.json app/lib/api-types.ts"
+    "gen:check": "bash scripts/gen-types.sh && git diff --exit-code public/openapi.json app/lib/api-types.ts"
   },
   "dependencies": {
     "clsx": "2.1.1",

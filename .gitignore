@@ -63,7 +63,7 @@ coverage/
 
 # Generated types — committed; CI verifies no drift
 # app/lib/api-types.ts
-# app/openapi.json
+# public/openapi.json
 
 # Local logs
 *.log

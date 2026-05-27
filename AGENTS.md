@@ -39,7 +39,7 @@ The master plan lives at `/Users/jadenfix/.claude/plans/let-s-do-8004-buzzing-be
 | `crates/payments`    | x402 facilitator client + env-var wallet with 5 hard rails |
 | `crates/cli`         | `eth-tools` binary (clap) |
 | `crates/dev-server`  | Local-only Axum binary mounting prod handlers on `:3000` |
-| `crates/openapi-gen` | Build-time tool emitting `app/openapi.json` |
+| `crates/openapi-gen` | Build-time tool emitting `public/openapi.json` |
 | `api/v1/index.rs`    | Catch-all REST function |
 | `api/mcp/index.rs`   | Catch-all MCP function |
 | `api/cron/*.rs`      | 8 cron worker functions |
@@ -73,7 +73,7 @@ bash scripts/bootstrap.sh
 - **Logs:** `tracing` with JSON output. **Never** log `std::env::var(...)` results, signed tx hex, signatures, or anything that looks like an API key.
 - **Tests:** mandatory per-crate. `payments` and `core` require ≥80% coverage before each phase completes.
 - **Migrations:** every `0NNN_*.sql` ships with a paired `down.sql`. Up→down→up tested in CI.
-- **OpenAPI:** every Axum handler has a `#[utoipa::path]` doc-attr. CI fails on `pnpm gen:types && git diff --exit-code app/openapi.json app/lib/api-types.ts`.
+- **OpenAPI:** every Axum handler has a `#[utoipa::path]` doc-attr. CI fails on `pnpm gen:types && git diff --exit-code public/openapi.json app/lib/api-types.ts`.
 
 ---
 
@@ -95,7 +95,7 @@ If you change anything in `crates/payments/` or `api/cron/wallet_*.rs`, ping `@j
 
 1. Write the handler in `crates/api/src/handlers/<name>.rs` with a `#[utoipa::path(...)]` doc-attr.
 2. Mount it in `crates/api/src/lib.rs` under the `Router` builder.
-3. Register the schema in `crates/openapi-gen/src/main.rs` so it lands in `app/openapi.json`.
+3. Register the schema in `crates/openapi-gen/src/main.rs` so it lands in `public/openapi.json`.
 4. `pnpm gen:types` regenerates `app/lib/api-types.ts`.
 5. Add a handler test under `crates/api/tests/` covering the happy path + one `DeniedReason`.
 6. Public-read endpoint? It auto-inherits sliding-window rate-limit from the middleware. Mutating endpoint? Add `Idempotency-Key` enforcement.
@@ -167,7 +167,7 @@ The repo currently has the Phase 4–7 work split across worktree branches await
 | `feat/phase-4-pr1-rpc-foundation` | `RotatingProvider`, circuit breaker, alloy sol! bindings |
 | `feat/phase-4-pr2-worker-substrate` | `WorkerContext`, advisory lock helper, `worker_runs`, cron secret |
 | `feat/phase-4-m4-vercel-runtime-2` | vercel_runtime 1.1 → 2.2 migration |
-| `feat/phase-4-m5-utoipa` | utoipa-driven `app/openapi.json` |
+| `feat/phase-4-m5-utoipa` | utoipa-driven `public/openapi.json` |
 | `feat/phase-4-w*` | individual worker implementations (W1–W8) |
 | `feat/phase-4-http-api-expansion` | 15 missing REST routes + idempotency middleware |
 | `feat/phase-5-mcp-server` | `rmcp` server with read-side tools + RFC 9728 |

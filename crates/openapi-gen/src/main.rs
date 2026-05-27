@@ -7,7 +7,7 @@
 //!
 //! Keep this in sync with `crates/api::router` whenever a route is added or
 //! a DTO shape changes — CI's `pnpm gen:check` enforces that the committed
-//! `app/openapi.json` and `app/lib/api-types.ts` match what this binary
+//! `public/openapi.json` and `app/lib/api-types.ts` match what this binary
 //! produces.
 
 use serde_json::json;

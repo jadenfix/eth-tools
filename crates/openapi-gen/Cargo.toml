@@ -1,6 +1,6 @@
 [package]
 name = "eth-tools-openapi-gen"
-description = "Build-time tool — dumps the utoipa OpenAPI doc to app/openapi.json"
+description = "Build-time tool — dumps the utoipa OpenAPI doc to public/openapi.json"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
