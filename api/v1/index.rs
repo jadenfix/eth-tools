@@ -1,26 +1,24 @@
 //! Vercel function entrypoint for /api/v1/*.
 //!
 //! Bridges `vercel_runtime::Request` (1.x — `http::Request<vercel_runtime::Body>`)
-//! to `axum::Router::oneshot` and back. The router itself is defined in
-//! `crates/api` and shared with `crates/dev-server`, so prod and local dev
-//! exercise the same handler code.
+//! to the shared `eth_tools_api::router` via `tower::Service::oneshot`, and
+//! converts the response back to `vercel_runtime::Response<Body>`.
 //!
-//! Vercel routes `/api/v1/*` to this single binary via `vercel.json` rewrites
-//! (`api/v1/(.*)` → `/api/v1/index`). Internal path dispatch happens inside
-//! the Axum router.
+//! Lifecycle: at cold-start we lazily build `AppState { pool }` once and
+//! stash it (plus the router that holds it) in a `tokio::sync::OnceCell`.
+//! Subsequent warm invocations skip the rebuild. Initialization is async
+//! because `eth_tools_db::connect` is.
 //!
-//! The router is constructed once at cold-start time and stored in a `OnceLock`
-//! so subsequent warm invocations skip rebuild. (Future Phase 1 work will use
-//! `tokio::sync::OnceCell` once the router needs an async DB-pool init.)
-
-use std::sync::OnceLock;
+//! Vercel routes `/api/v1/*` here via `vercel.json` rewrites
+//! (`api/v1/(.*)` → `/api/v1/index`).
 
 use axum::body::Body as AxumBody;
 use http::Request as HttpRequest;
+use tokio::sync::OnceCell;
 use tower::ServiceExt;
 use vercel_runtime::{run, Body, Error, Request, Response};
 
-static APP: OnceLock<axum::Router> = OnceLock::new();
+static APP: OnceCell<axum::Router> = OnceCell::const_new();
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -29,15 +27,28 @@ async fn main() -> Result<(), Error> {
         .with_ansi(false)
         .json()
         .init();
-    // Build the router once at cold-start.
-    let _ = APP.set(eth_tools_api::router());
     run(handler).await
 }
 
 async fn handler(req: Request) -> Result<Response<Body>, Error> {
-    let app = APP.get().expect("router initialized in main()");
+    let app = APP
+        .get_or_try_init(|| async {
+            let url = std::env::var("DATABASE_URL")
+                .map_err(|_| Error::from("DATABASE_URL must be set in production"))?;
+            let pool = eth_tools_db::connect(&url)
+                .await
+                .map_err(|e| Error::from(format!("db connect: {e}")))?;
+            Ok::<_, Error>(eth_tools_api::router(eth_tools_api::AppState::new(pool)))
+        })
+        .await?;
 
-    // vercel_runtime::Request → axum http::Request<axum::body::Body>
+    bridge(app, req).await
+}
+
+/// Pure conversion function — Vercel Request → Axum oneshot → Vercel Response.
+/// Extracted so the test suite can drive it against any Router, no env-var
+/// or DATABASE_URL plumbing required.
+async fn bridge(app: &axum::Router, req: Request) -> Result<Response<Body>, Error> {
     let (parts, body) = req.into_parts();
     let body_bytes: Vec<u8> = match body {
         Body::Text(s) => s.into_bytes(),
@@ -46,19 +57,13 @@ async fn handler(req: Request) -> Result<Response<Body>, Error> {
     };
     let axum_req = HttpRequest::from_parts(parts, AxumBody::from(body_bytes));
 
-    // Route through Axum. Router's `Service::Error` is `Infallible`, so the
-    // only failure mode is a handler returning a non-2xx Response — never Err.
-    // `Infallible` can't be constructed, so `unwrap` is type-safe here.
+    // Router::Service::Error is Infallible — `unwrap` is type-safe.
     let axum_resp = app.clone().oneshot(axum_req).await.unwrap();
 
-    // axum::Response → vercel_runtime::Response<Body>
     let (parts, body) = axum_resp.into_parts();
     let body_bytes = axum::body::to_bytes(body, usize::MAX)
         .await
         .map_err(|e| Error::from(format!("response body collect: {e}")))?;
-
-    // Prefer Body::Text when the bytes are valid UTF-8 so logs/streaming stay
-    // human-readable; fall back to Binary otherwise.
     let vercel_body = if body_bytes.is_empty() {
         Body::Empty
     } else {
@@ -72,49 +77,76 @@ async fn handler(req: Request) -> Result<Response<Body>, Error> {
 
 #[cfg(test)]
 mod tests {
-    //! Bridge round-trip test: synthesize a `vercel_runtime::Request`, drive
-    //! it through `handler`, assert we get back the JSON body the Axum router
-    //! produced. Pins the body/parts conversion so a future refactor can't
-    //! silently regress the contract.
+    //! Bridge round-trip against a stub Router (no DB needed) — proves the
+    //! conversion contract. The full handler + AppState path is covered by
+    //! crates/api's testcontainers tests.
+
     use super::*;
+    use axum::routing::get;
+
+    fn stub_router() -> axum::Router {
+        axum::Router::new()
+            .route("/echo", get(|| async { "echoed" }))
+            .route(
+                "/api/v1/health",
+                get(|| async { axum::Json(serde_json::json!({"status": "ok"})) }),
+            )
+            .fallback(|| async {
+                (
+                    http::StatusCode::NOT_FOUND,
+                    axum::Json(serde_json::json!({"error": {"code": "ROUTE_NOT_FOUND"}})),
+                )
+            })
+    }
 
     #[tokio::test]
-    async fn bridge_round_trip_health() {
-        let _ = APP.set(eth_tools_api::router());
+    async fn bridge_round_trip_text() {
+        let app = stub_router();
+        let req = http::Request::builder()
+            .method("GET")
+            .uri("https://example.com/echo")
+            .body(Body::Empty)
+            .unwrap();
+        let resp = bridge(&app, req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+        let body = match resp.into_body() {
+            Body::Text(s) => s,
+            _ => panic!("expected text body"),
+        };
+        assert_eq!(body, "echoed");
+    }
 
+    #[tokio::test]
+    async fn bridge_round_trip_json() {
+        let app = stub_router();
         let req = http::Request::builder()
             .method("GET")
             .uri("https://example.com/api/v1/health")
             .body(Body::Empty)
             .unwrap();
-
-        let resp = handler(req).await.unwrap();
+        let resp = bridge(&app, req).await.unwrap();
         assert_eq!(resp.status(), 200);
         let body = match resp.into_body() {
             Body::Text(s) => s,
-            Body::Binary(b) => String::from_utf8(b).unwrap(),
-            Body::Empty => String::new(),
+            _ => panic!("expected text body"),
         };
         let v: serde_json::Value = serde_json::from_str(&body).unwrap();
         assert_eq!(v["status"], "ok");
     }
 
     #[tokio::test]
-    async fn bridge_returns_typed_404_for_unknown_route() {
-        let _ = APP.set(eth_tools_api::router());
-
+    async fn bridge_passes_through_404_envelope() {
+        let app = stub_router();
         let req = http::Request::builder()
             .method("GET")
-            .uri("https://example.com/api/v1/no-such-route")
+            .uri("https://example.com/no-such-route")
             .body(Body::Empty)
             .unwrap();
-
-        let resp = handler(req).await.unwrap();
+        let resp = bridge(&app, req).await.unwrap();
         assert_eq!(resp.status(), 404);
         let body = match resp.into_body() {
             Body::Text(s) => s,
-            Body::Binary(b) => String::from_utf8(b).unwrap(),
-            Body::Empty => String::new(),
+            _ => panic!("expected text body"),
         };
         let v: serde_json::Value = serde_json::from_str(&body).unwrap();
         assert_eq!(v["error"]["code"], "ROUTE_NOT_FOUND");

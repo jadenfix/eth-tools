@@ -11,3 +11,15 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+sqlx.workspace = true
+chrono.workspace = true
+bigdecimal.workspace = true
+uuid.workspace = true
+async-trait.workspace = true
+
+eth-tools-core.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+testcontainers.workspace = true
+testcontainers-modules.workspace = true
