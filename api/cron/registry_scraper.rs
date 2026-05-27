@@ -9,7 +9,7 @@
 //! 4. Dry-run mode via `?dryrun=1`.
 //! 5. Cursor + idempotency + telemetry + lag — added with real impl.
 
-use vercel_runtime::{run, Body, Error, Request, Response};
+use vercel_runtime::{run, service_fn, Error, Request, Response, ResponseBody};
 
 const WORKER_NAME: &str = "registry_scraper";
 
@@ -20,10 +20,10 @@ async fn main() -> Result<(), Error> {
         .with_ansi(false)
         .json()
         .init();
-    run(handler).await
+    run(service_fn(handler)).await
 }
 
-async fn handler(req: Request) -> Result<Response<Body>, Error> {
+async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
     eth_tools_workers::cron::serve(WORKER_NAME, req, |_dryrun| async move {
         Ok(eth_tools_workers::WorkerSummary::ok(WORKER_NAME))
     })

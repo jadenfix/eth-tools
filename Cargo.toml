@@ -32,7 +32,7 @@ clap = { version = "4", features = ["derive", "env"] }
 axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio", "query"] }
 tower = { version = "0.5", default-features = false, features = ["util"] }
 tower-http = { version = "0.6", default-features = false, features = ["trace", "cors"] }
-vercel_runtime = "1.1"   # 2.x has Service-based API break; migrate as part of Phase 1 when handlers are rewritten
+vercel_runtime = "2"
 subtle = "2"
 sha2 = "0.10"
 
@@ -81,6 +81,11 @@ eth-tools-mcp.workspace = true
 eth-tools-workers.workspace = true
 eth-tools-core.workspace = true
 eth-tools-db.workspace = true
+
+[dev-dependencies]
+# Used by api/v1/index.rs tests to collect `vercel_runtime::ResponseBody`
+# (a `BoxBody` newtype) into bytes for assertions.
+http-body-util = "0.1"
 
 [[bin]]
 name = "api_v1"

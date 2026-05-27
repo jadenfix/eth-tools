@@ -4,7 +4,8 @@
 //! Phase 5 alongside the `vercel_runtime` 2.x migration. Vercel routes
 //! `/api/mcp/*` here via `vercel.json` rewrites.
 
-use vercel_runtime::{run, Body, Error, Request, Response, StatusCode};
+use http::StatusCode;
+use vercel_runtime::{run, service_fn, Error, Request, Response, ResponseBody};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -13,10 +14,10 @@ async fn main() -> Result<(), Error> {
         .with_ansi(false)
         .json()
         .init();
-    run(handler).await
+    run(service_fn(handler)).await
 }
 
-async fn handler(req: Request) -> Result<Response<Body>, Error> {
+async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
     tracing::info!(method = %req.method(), uri = %req.uri(), "api_mcp request");
     let body = serde_json::json!({
         "service": "eth-tools",
@@ -27,5 +28,5 @@ async fn handler(req: Request) -> Result<Response<Body>, Error> {
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("content-type", "application/json")
-        .body(Body::Text(body.to_string()))?)
+        .body(ResponseBody::from(body.to_string()))?)
 }

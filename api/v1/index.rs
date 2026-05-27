@@ -1,8 +1,8 @@
 //! Vercel function entrypoint for /api/v1/*.
 //!
-//! Bridges `vercel_runtime::Request` (1.x — `http::Request<vercel_runtime::Body>`)
+//! Bridges `vercel_runtime::Request` (2.x — `http::Request<hyper::body::Incoming>`)
 //! to the shared `eth_tools_api::router` via `tower::Service::oneshot`, and
-//! converts the response back to `vercel_runtime::Response<Body>`.
+//! converts the response back to `http::Response<vercel_runtime::ResponseBody>`.
 //!
 //! Lifecycle: at cold-start we lazily build `AppState { pool }` once and
 //! stash it (plus the router that holds it) in a `tokio::sync::OnceCell`.
@@ -16,7 +16,7 @@ use axum::body::Body as AxumBody;
 use http::Request as HttpRequest;
 use tokio::sync::OnceCell;
 use tower::ServiceExt;
-use vercel_runtime::{run, Body, Error, Request, Response};
+use vercel_runtime::{run, Error, Request, Response, ResponseBody};
 
 static APP: OnceCell<axum::Router> = OnceCell::const_new();
 
@@ -27,10 +27,10 @@ async fn main() -> Result<(), Error> {
         .with_ansi(false)
         .json()
         .init();
-    run(handler).await
+    run(vercel_runtime::service_fn(handler)).await
 }
 
-async fn handler(req: Request) -> Result<Response<Body>, Error> {
+async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
     let app = APP
         .get_or_try_init(|| async {
             let url = std::env::var("DATABASE_URL")
@@ -42,7 +42,13 @@ async fn handler(req: Request) -> Result<Response<Body>, Error> {
         })
         .await?;
 
-    bridge(app, req).await
+    // 2.x `Request` carries `hyper::body::Incoming`. Wrap it in `axum::body::Body`
+    // (which is a generic `http_body::Body` adapter) so the bridge can stay
+    // generic and the test suite can drive it with `Body::empty()` /
+    // `Body::from(Vec<u8>)` — no real hyper connection needed.
+    let (parts, body) = req.into_parts();
+    let axum_req = HttpRequest::from_parts(parts, AxumBody::new(body));
+    bridge(app, axum_req).await
 }
 
 /// Response body cap. Vercel itself enforces ~4.5 MB on Functions, but our
@@ -50,18 +56,17 @@ async fn handler(req: Request) -> Result<Response<Body>, Error> {
 /// isolate by emitting an unbounded stream.
 const MAX_BODY_BYTES: usize = 10 * 1024 * 1024;
 
-/// Pure conversion function — Vercel Request → Axum oneshot → Vercel Response.
+/// Pure conversion function — Axum request → Axum oneshot → Vercel Response.
 /// Extracted so the test suite can drive it against any Router, no env-var
 /// or DATABASE_URL plumbing required.
-async fn bridge(app: &axum::Router, req: Request) -> Result<Response<Body>, Error> {
-    let (parts, body) = req.into_parts();
-    let body_bytes: Vec<u8> = match body {
-        Body::Text(s) => s.into_bytes(),
-        Body::Binary(b) => b,
-        Body::Empty => Vec::new(),
-    };
-    let axum_req = HttpRequest::from_parts(parts, AxumBody::from(body_bytes));
-
+///
+/// The body type is fixed to `axum::body::Body` so production (`Incoming`
+/// wrapped via `Body::new`) and tests (`Body::empty()`, `Body::from(Vec<u8>)`)
+/// share a single signature. The 10 MB cap still bounds collection.
+async fn bridge(
+    app: &axum::Router,
+    req: HttpRequest<AxumBody>,
+) -> Result<Response<ResponseBody>, Error> {
     // `Router::Service::Error` is `Infallible`; the empty `match` proves
     // unreachability to the compiler without ever calling `unwrap` (a panic
     // here would tear down the Vercel isolate and discard the cached
@@ -70,7 +75,7 @@ async fn bridge(app: &axum::Router, req: Request) -> Result<Response<Body>, Erro
     // runtime cost.
     let axum_resp = app
         .clone()
-        .oneshot(axum_req)
+        .oneshot(req)
         .await
         .unwrap_or_else(|e: std::convert::Infallible| match e {});
 
@@ -78,15 +83,7 @@ async fn bridge(app: &axum::Router, req: Request) -> Result<Response<Body>, Erro
     let body_bytes = axum::body::to_bytes(body, MAX_BODY_BYTES)
         .await
         .map_err(|e| Error::from(format!("response body collect: {e}")))?;
-    let vercel_body = if body_bytes.is_empty() {
-        Body::Empty
-    } else {
-        match std::str::from_utf8(&body_bytes) {
-            Ok(s) => Body::Text(s.to_string()),
-            Err(_) => Body::Binary(body_bytes.to_vec()),
-        }
-    };
-    Ok(Response::from_parts(parts, vercel_body))
+    Ok(Response::from_parts(parts, ResponseBody::from(body_bytes)))
 }
 
 #[cfg(test)]
@@ -94,9 +91,16 @@ mod tests {
     //! Bridge round-trip against a stub Router (no DB needed) — proves the
     //! conversion contract. The full handler + AppState path is covered by
     //! crates/api's testcontainers tests.
+    //!
+    //! Note vs. 1.x: tests build requests with `axum::body::Body` (since 2.x's
+    //! `Request<Incoming>` is unconstructible outside a real hyper connection)
+    //! and read responses by collecting the `ResponseBody` through
+    //! `http_body_util::BodyExt::collect`. The asserted behaviors
+    //! (status, headers, body bytes) are unchanged.
 
     use super::*;
     use axum::routing::get;
+    use http_body_util::BodyExt;
 
     fn stub_router() -> axum::Router {
         axum::Router::new()
@@ -113,21 +117,24 @@ mod tests {
             })
     }
 
+    async fn collect_body(resp: Response<ResponseBody>) -> (http::response::Parts, Vec<u8>) {
+        let (parts, body) = resp.into_parts();
+        let bytes = body.collect().await.unwrap().to_bytes().to_vec();
+        (parts, bytes)
+    }
+
     #[tokio::test]
     async fn bridge_round_trip_text() {
         let app = stub_router();
         let req = http::Request::builder()
             .method("GET")
             .uri("https://example.com/echo")
-            .body(Body::Empty)
+            .body(AxumBody::empty())
             .unwrap();
         let resp = bridge(&app, req).await.unwrap();
-        assert_eq!(resp.status(), 200);
-        let body = match resp.into_body() {
-            Body::Text(s) => s,
-            _ => panic!("expected text body"),
-        };
-        assert_eq!(body, "echoed");
+        let (parts, body) = collect_body(resp).await;
+        assert_eq!(parts.status, 200);
+        assert_eq!(String::from_utf8(body).unwrap(), "echoed");
     }
 
     #[tokio::test]
@@ -136,15 +143,12 @@ mod tests {
         let req = http::Request::builder()
             .method("GET")
             .uri("https://example.com/api/v1/health")
-            .body(Body::Empty)
+            .body(AxumBody::empty())
             .unwrap();
         let resp = bridge(&app, req).await.unwrap();
-        assert_eq!(resp.status(), 200);
-        let body = match resp.into_body() {
-            Body::Text(s) => s,
-            _ => panic!("expected text body"),
-        };
-        let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let (parts, body) = collect_body(resp).await;
+        assert_eq!(parts.status, 200);
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["status"], "ok");
     }
 
@@ -154,20 +158,20 @@ mod tests {
         let req = http::Request::builder()
             .method("GET")
             .uri("https://example.com/no-such-route")
-            .body(Body::Empty)
+            .body(AxumBody::empty())
             .unwrap();
         let resp = bridge(&app, req).await.unwrap();
-        assert_eq!(resp.status(), 404);
-        let body = match resp.into_body() {
-            Body::Text(s) => s,
-            _ => panic!("expected text body"),
-        };
-        let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let (parts, body) = collect_body(resp).await;
+        assert_eq!(parts.status, 404);
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["error"]["code"], "ROUTE_NOT_FOUND");
     }
 
-    /// A non-UTF-8 response body must survive the round trip as `Body::Binary`,
-    /// not be mangled or lossy-decoded.
+    /// A non-UTF-8 response body must survive the round trip byte-for-byte.
+    /// In 1.x this required the `Body::Binary` variant; in 2.x `ResponseBody`
+    /// is opaque bytes (no Text/Binary split), so we assert directly on the
+    /// collected bytes — including the `content-type: octet-stream` header
+    /// that downstreams use to distinguish binary from JSON.
     #[tokio::test]
     async fn bridge_round_trip_binary() {
         let app = axum::Router::new().route(
@@ -185,18 +189,15 @@ mod tests {
         let req = http::Request::builder()
             .method("GET")
             .uri("https://example.com/blob")
-            .body(Body::Empty)
+            .body(AxumBody::empty())
             .unwrap();
         let resp = bridge(&app, req).await.unwrap();
-        assert_eq!(resp.status(), 200);
+        let (parts, body) = collect_body(resp).await;
+        assert_eq!(parts.status, 200);
         assert_eq!(
-            resp.headers().get("content-type").map(|v| v.as_bytes()),
+            parts.headers.get("content-type").map(|v| v.as_bytes()),
             Some(&b"application/octet-stream"[..])
         );
-        let body = match resp.into_body() {
-            Body::Binary(b) => b,
-            other => panic!("expected binary body, got {other:?}"),
-        };
         assert_eq!(body, vec![0xff, 0xfe, 0xfd, 0x80, 0x00, 0x01]);
     }
 }

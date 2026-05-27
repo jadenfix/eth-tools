@@ -12,15 +12,25 @@
 
 use std::future::Future;
 
+use http::StatusCode;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
-use vercel_runtime::{Body, Error, Request, Response, StatusCode};
+use vercel_runtime::{Error, Response, ResponseBody};
 
 use crate::WorkerSummary;
 
 /// Run a cron worker. The closure receives a `dryrun: bool` and returns the
 /// summary it would have written.
-pub async fn serve<F, Fut>(worker_name: &'static str, req: Request, body: F) -> Result<Response<Body>, Error>
+///
+/// Generic over the request body type: production passes
+/// `vercel_runtime::Request` (`http::Request<hyper::body::Incoming>`); tests
+/// pass `http::Request<()>` (no real hyper connection required). The body is
+/// never read here — this guard inspects headers, method, and URI only.
+pub async fn serve<F, Fut, B>(
+    worker_name: &'static str,
+    req: http::Request<B>,
+    body: F,
+) -> Result<Response<ResponseBody>, Error>
 where
     F: FnOnce(bool) -> Fut,
     Fut: Future<Output = Result<WorkerSummary, Error>>,
@@ -80,7 +90,7 @@ where
         return Ok(Response::builder()
             .status(status)
             .header("content-type", "application/json")
-            .body(Body::Text(body.to_string()))?);
+            .body(ResponseBody::from(body.to_string()))?);
     }
 
     // 2. Env-aware skip.
@@ -105,11 +115,11 @@ where
     ok_json(&summary)
 }
 
-fn ok_json<T: serde::Serialize>(value: &T) -> Result<Response<Body>, Error> {
+fn ok_json<T: serde::Serialize>(value: &T) -> Result<Response<ResponseBody>, Error> {
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("content-type", "application/json")
-        .body(Body::Text(serde_json::to_string(value)?))?)
+        .body(ResponseBody::from(serde_json::to_string(value)?))?)
 }
 
 /// Length-hiding constant-time string compare.
@@ -129,7 +139,10 @@ fn constant_time_eq_str(a: &str, b: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn req_with(headers: &[(&'static str, &'static str)], query: Option<&str>) -> Request {
+    // `serve()` never reads the body — `()` is the cheapest body type to
+    // construct and avoids depending on `hyper::body::Incoming` (which only
+    // exists on a live connection in 2.x).
+    fn req_with(headers: &[(&'static str, &'static str)], query: Option<&str>) -> http::Request<()> {
         let mut builder = http::Request::builder().method("POST").uri(match query {
             Some(q) => format!("https://example.com/api/cron/test?{q}"),
             None => "https://example.com/api/cron/test".into(),
@@ -137,7 +150,7 @@ mod tests {
         for (k, v) in headers {
             builder = builder.header(*k, *v);
         }
-        builder.body(Body::Empty).unwrap()
+        builder.body(()).unwrap()
     }
 
     // Single test: env-var mutation is process-global and would race if split
