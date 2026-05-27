@@ -52,6 +52,9 @@
 use crate::edge_config::{EdgeConfig, EdgeConfigError};
 use crate::wallet::balance::{BalanceError, BalanceProvider};
 use crate::wallet::daily_cap::{SpendCounter, SpendCounterError};
+use crate::wallet::nonce::NonceProvider;
+use crate::wallet::rpc::WalletRpcSeed;
+use crate::wallet::signer::TxSigner;
 use crate::wallet::{
     daily_spend_key, ALLOWED_CHAIN_ID, ALLOWED_RECIPIENTS, KILL_SWITCH_KEY, MAX_BALANCE_USD_CENTS,
     MAX_DAILY_SPEND_USD_CENTS, MAX_PER_TX_GAS, VERCEL_PRODUCTION,
@@ -146,6 +149,13 @@ impl Rail {
 
 /// All the runtime context the rails need. Built once per request by
 /// `sign_and_send` from the cold-start cache.
+///
+/// The three `Option<&dyn …>` collaborators at the bottom power the
+/// signing path (phase 6.2). They are optional because rail-only callers
+/// (the existing denial-path integration tests, CLI dry-runs) don't need
+/// to construct a signer or hit the chain. If any of them is `None` the
+/// signing path returns `SIGNING_DISABLED` immediately AFTER the rails
+/// run — denials get their audit row, but no on-chain dispatch happens.
 pub struct PolicyContext<'a> {
     pub vercel_env: &'a str,
     pub edge_config: &'a dyn EdgeConfig,
@@ -160,6 +170,18 @@ pub struct PolicyContext<'a> {
     /// wires it in (phase 6.2). The plumbing exists today so callers can
     /// thread the value through without a follow-up signature change.
     pub api_key_id: Option<Uuid>,
+
+    // -- phase 6.2 signing collaborators --------------------------------
+
+    /// Wallet signer (alloy `LocalSigner` in prod, `MockSigner` in tests).
+    /// `None` short-circuits the signing path AFTER the rails.
+    pub signer: Option<&'a dyn TxSigner>,
+    /// Wallet RPC for chain_id check, balance, gas fees, send, receipt.
+    /// `None` short-circuits the signing path AFTER the rails.
+    pub wallet_rpc: Option<&'a dyn WalletRpcSeed>,
+    /// Postgres-backed nonce allocator. `None` short-circuits the signing
+    /// path AFTER the rails.
+    pub nonce_store: Option<&'a dyn NonceProvider>,
 }
 
 impl<'a> PolicyContext<'a> {
@@ -179,6 +201,9 @@ impl<'a> PolicyContext<'a> {
             balance_provider,
             cost_cents: ESTIMATED_TX_COST_USD_CENTS,
             api_key_id: None,
+            signer: None,
+            wallet_rpc: None,
+            nonce_store: None,
         }
     }
 
@@ -186,6 +211,21 @@ impl<'a> PolicyContext<'a> {
     /// denials audit row. Returns `self` so it chains off `::new`.
     pub fn with_api_key_id(mut self, api_key_id: Option<Uuid>) -> Self {
         self.api_key_id = api_key_id;
+        self
+    }
+
+    /// Attach the signing collaborators. Without this the signing path
+    /// returns `SIGNING_DISABLED` post-rails (rails still run + denials
+    /// still get their audit row).
+    pub fn with_signing(
+        mut self,
+        signer: &'a dyn TxSigner,
+        wallet_rpc: &'a dyn WalletRpcSeed,
+        nonce_store: &'a dyn NonceProvider,
+    ) -> Self {
+        self.signer = Some(signer);
+        self.wallet_rpc = Some(wallet_rpc);
+        self.nonce_store = Some(nonce_store);
         self
     }
 

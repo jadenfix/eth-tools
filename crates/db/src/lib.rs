@@ -18,7 +18,7 @@ pub mod worker_runs;
 
 pub use sqlx::PgPool as Pool;
 
-pub const LATEST_MIGRATION: &str = "0002_chains_seed";
+pub const LATEST_MIGRATION: &str = "0003_wallet_nonces";
 
 /// Build a Postgres pool sized for PgBouncer (Neon's pooler default is
 /// transaction-mode with 100 connections). Conservative `max_connections` so
@@ -63,6 +63,6 @@ mod migration_tests {
             entries.iter().any(|f| f.ends_with(".up.sql")),
             "no up migrations found"
         );
-        assert!(LATEST_MIGRATION.starts_with("0002"));
+        assert!(LATEST_MIGRATION.starts_with("0003"));
     }
 }

@@ -28,8 +28,13 @@ use alloy_primitives::{address, Address};
 
 pub mod balance;
 pub mod daily_cap;
+pub mod gas;
+pub mod nonce;
 pub mod policy;
+pub mod rpc;
 pub mod sign;
+pub mod signer;
+pub mod txs;
 
 pub use policy::{
     evaluate_all, reconcile_actual_cost, Approved, PolicyContext, Rail, TransactionRequest,

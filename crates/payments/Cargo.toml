@@ -12,17 +12,37 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "time"] }
 sqlx.workspace = true
 uuid.workspace = true
-alloy.workspace = true
+# Phase 6.2 — alloy features needed for the signing path. We over-ride the
+# workspace `alloy` feature list here (default-features still off so cold-start
+# isn't paying for the kitchen sink in other crates) and bolt on:
+#   - providers / transport-http / network — HTTP `Provider` for the EOA
+#   - signer-local                        — `PrivateKeySigner` (zeroize-on-drop)
+#   - consensus / rpc-types               — TransactionRequest + receipts
+#   - contract                            — for selector encoding helpers
+alloy = { version = "1", default-features = false, features = [
+    "sol-types", "rlp", "rpc-types",
+    "providers", "transport-http", "network",
+    "signer-local", "consensus", "contract",
+] }
 alloy-primitives.workspace = true
+secrecy.workspace = true
+hex.workspace = true
+chrono.workspace = true
+bigdecimal.workspace = true
+# Phase 6 x402 — facilitator client (HTTP) + base64 of PaymentPayload
+reqwest.workspace = true
+base64.workspace = true
 eth-tools-core.workspace = true
 eth-tools-db.workspace = true
+eth-tools-rpc.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 proptest = "1"
 testcontainers.workspace = true
 testcontainers-modules.workspace = true
 chrono.workspace = true
+wiremock.workspace = true
