@@ -25,6 +25,7 @@ pub mod cron;
 pub mod reputation_aggregator;
 pub mod reputation_summary;
 mod rpc_http;
+pub mod validation_aggregator;
 
 pub use context::{deps, WorkerContext, WorkerDeps};
 
