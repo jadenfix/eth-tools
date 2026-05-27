@@ -30,18 +30,28 @@ pub struct Health {
 }
 
 pub async fn get(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
-    let total = eth_tools_db::agents::count(&state.pool, None).await?;
+    // Single grouped query instead of 1 + N per-chain COUNT(*). `/health` is
+    // the canonical liveness probe — uptime monitors hit it often, so an N+1
+    // here turns into a self-inflicted small DoS on the pooler.
+    let grouped = eth_tools_db::agents::count_by_chain(&state.pool).await?;
+    let total: i64 = grouped.iter().map(|(_, n)| *n).sum();
 
-    let mut per_chain = Vec::with_capacity(CHAINS.len());
-    for c in CHAINS {
-        let n = eth_tools_db::agents::count(&state.pool, Some(c.chain_id as i64)).await?;
-        per_chain.push(ChainHealth {
-            chain_id: c.chain_id,
-            name: c.name,
-            is_testnet: c.is_testnet,
-            agents_indexed: n,
-        });
-    }
+    let per_chain: Vec<ChainHealth> = CHAINS
+        .iter()
+        .map(|c| {
+            let n = grouped
+                .iter()
+                .find(|(id, _)| *id == c.chain_id as i64)
+                .map(|(_, n)| *n)
+                .unwrap_or(0);
+            ChainHealth {
+                chain_id: c.chain_id,
+                name: c.name,
+                is_testnet: c.is_testnet,
+                agents_indexed: n,
+            }
+        })
+        .collect();
 
     let h = Health {
         status: "ok",

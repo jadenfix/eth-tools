@@ -30,21 +30,39 @@ declare module 'next-auth/jwt' {
 }
 
 /**
+ * The custom-domain alias assigned to the `main` branch's preview deployment
+ * (Vercel "Branch Alias"). The second GitHub OAuth App's callback is registered
+ * here; we let sign-in through on requests that arrive at this host.
+ */
+export const STABLE_PREVIEW_ALIAS = 'preview.eth-tools.dev';
+
+/**
  * Returns true on hosts where the GitHub OAuth flow is permitted.
  *
- * - production: always true.
- * - the stable preview alias `preview.eth-tools.dev`: true (second OAuth App).
  * - local dev (no VERCEL_ENV): true.
- * - PR previews (`*-git-*.vercel.app`, VERCEL_ENV === 'preview' without the
- *   stable alias): FALSE — show the disabled banner instead of attempting
- *   sign-in.
+ * - production (VERCEL_ENV === 'production'): true.
+ * - preview deploys: true iff the inbound request's `Host` header equals
+ *   {@link STABLE_PREVIEW_ALIAS}. The reason this checks the Host header (not
+ *   `VERCEL_URL`): on Vercel `VERCEL_URL` is always the per-deployment
+ *   `*-git-*.vercel.app` URL, never the assigned custom alias, so the
+ *   previous `VERCEL_URL === 'preview.eth-tools.dev'` check was dead code.
+ *   PR previews and any preview hit through `*.vercel.app`: FALSE — banner
+ *   instead.
+ *
+ * Reads `headers()` so it must be invoked from a Server Component, Route
+ * Handler, or Server Action.
  */
-export function oauthEnabledHost(): boolean {
+export async function oauthEnabledHost(): Promise<boolean> {
   const env = process.env.VERCEL_ENV;
   if (!env) return true; // local dev
   if (env === 'production') return true;
-  if (process.env.VERCEL_URL === 'preview.eth-tools.dev') return true;
-  return false;
+
+  // Defer the dynamic import so this module remains importable from places
+  // that don't run inside a request scope (e.g. NextAuth config bootstrap).
+  const { headers } = await import('next/headers');
+  const h = await headers();
+  const host = h.get('host')?.toLowerCase() ?? '';
+  return host === STABLE_PREVIEW_ALIAS;
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

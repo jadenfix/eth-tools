@@ -33,6 +33,30 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Returns the URL only if its scheme is on the allowlist; otherwise null.
+ *
+ * `agent_uri` is operator-supplied data from on-chain registry events; once
+ * worker writes land in Phase 4 a malicious manifest could submit
+ * `javascript:…` and we'd render it into `<a href={…}>`. Next.js escapes
+ * attribute values but does NOT block `javascript:` schemes — browsers will
+ * still execute them on click. Keep the surface tight by allowlisting.
+ */
+export function safeExternalHref(uri: string | null | undefined): string | null {
+  if (!uri) return null;
+  try {
+    const u = new URL(uri);
+    // `https:` covers the vast majority; `ipfs:` is the spec's content-address
+    // format; `ar:` (Arweave) is the other content-address scheme in use.
+    if (u.protocol === 'https:' || u.protocol === 'ipfs:' || u.protocol === 'ar:') {
+      return u.toString();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function baseUrl(): string {
   if (process.env.NODE_ENV !== 'production') {
     return process.env.INTERNAL_API_URL ?? 'http://127.0.0.1:3000';

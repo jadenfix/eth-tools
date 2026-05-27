@@ -122,6 +122,87 @@ async fn list_keyset_pagination_no_duplicates() {
     assert!(unique >= 6, "expected ≥6 distinct agents, got {unique}");
 }
 
+/// Regression for the keyset filter: the previous tuple `<` form silently
+/// dropped rows whose `(chain_id, agent_id)` was *smaller* than the cursor
+/// on a tied `updated_at`, because Postgres tuple comparison is purely
+/// lexicographic and has no mixed-direction semantics for
+/// `ORDER BY updated_at DESC, chain_id ASC, agent_id ASC`.
+///
+/// We construct four rows that share an `updated_at` and `chain_id` and page
+/// with `limit=1` — every row must be returned exactly once.
+#[tokio::test]
+async fn list_keyset_handles_tied_updated_at() {
+    let Some((_c, pool)) = boot().await else {
+        return;
+    };
+
+    // Use a fixed `updated_at` for all four rows on the same chain to force
+    // the tie-breaker columns to do the work.
+    let tied_at = chrono::Utc::now();
+    sqlx::query(
+        "INSERT INTO agents (chain_id, agent_id, owner, agent_uri, agent_wallet, registered_at, updated_at)
+         VALUES
+           (8453, 9001, decode('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','hex'), NULL, NULL, $1, $1),
+           (8453, 9002, decode('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','hex'), NULL, NULL, $1, $1),
+           (8453, 9003, decode('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','hex'), NULL, NULL, $1, $1),
+           (8453, 9004, decode('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','hex'), NULL, NULL, $1, $1)",
+    )
+    .bind(tied_at)
+    .execute(&pool)
+    .await
+    .expect("insert tied rows");
+
+    // Page through ONLY the chain we just stuffed, with limit=1.
+    let mut seen: Vec<BigDecimal> = Vec::new();
+    let mut cursor: Option<eth_tools_db::agents::KeysetCursor> = None;
+    for _ in 0..32 {
+        let page = eth_tools_db::agents::list(
+            &pool,
+            eth_tools_db::agents::ListParams {
+                chain_id: Some(8453),
+                limit: 1,
+                after: cursor.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        if page.is_empty() {
+            break;
+        }
+        let last = page.last().unwrap();
+        cursor = Some(eth_tools_db::agents::KeysetCursor {
+            updated_at: last.updated_at,
+            chain_id: last.chain_id,
+            agent_id: last.agent_id.clone(),
+        });
+        seen.extend(page.into_iter().map(|r| r.agent_id));
+    }
+
+    // All four of the synthetic agent_ids must appear exactly once. (Other
+    // seeded base agents may also appear — we only assert presence of 9001-4
+    // and no duplicates among them.)
+    for id in ["9001", "9002", "9003", "9004"] {
+        let want = BigDecimal::from_str(id).unwrap();
+        let count = seen.iter().filter(|got| **got == want).count();
+        assert_eq!(count, 1, "agent_id={id} expected exactly once, saw {count}");
+    }
+}
+
+#[tokio::test]
+async fn count_by_chain_matches_per_chain_count() {
+    let Some((_c, pool)) = boot().await else {
+        return;
+    };
+    let grouped = eth_tools_db::agents::count_by_chain(&pool).await.unwrap();
+    // Cross-check against the per-chain count() helper.
+    for (chain_id, n) in &grouped {
+        let direct = eth_tools_db::agents::count(&pool, Some(*chain_id)).await.unwrap();
+        assert_eq!(direct, *n, "count_by_chain mismatch on chain {chain_id}");
+    }
+    // grouped should be ≤ 2 since seed only populates Base + Base Sepolia.
+    assert!(grouped.len() <= eth_tools_core::CHAINS.len());
+}
+
 #[tokio::test]
 async fn get_one_roundtrip() {
     let Some((_c, pool)) = boot().await else {

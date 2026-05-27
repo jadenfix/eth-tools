@@ -1,8 +1,8 @@
 [toolchain]
 # Pinned to a concrete patch — `stable` alone floats past MSRV bumps and
-# edition-2024 hard-error changes (e.g. `std::env::set_var`). 1.86 is the first
-# patch where every transitive dep we pull (clap_lex 1.1+ etc.) parses without
-# requiring an unstable cargo feature. Bump in its own PR.
-channel = "1.86.0"
+# edition-2024 hard-error changes (e.g. `std::env::set_var`). 1.90 is the
+# first patch that satisfies every transitive dep we pull (`darling 0.23`,
+# `home 0.5.12`, `serde_with 3.20` all require ≥1.88). Bump in its own PR.
+channel = "1.90"
 components = ["rustfmt", "clippy"]
 profile = "minimal"

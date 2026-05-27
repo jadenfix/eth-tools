@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { listAgents, type Agent } from '@/lib/rust';
+import { listAgents, safeExternalHref, type Agent } from '@/lib/rust';
 
 type SearchParams = Promise<{ cursor?: string | string[] }>;
 
@@ -73,18 +73,21 @@ export default async function AgentsListPage({
                   <td className="px-4 py-2 text-zinc-400">{agent.updated_at}</td>
                   <td className="px-4 py-2">{agent.agent_wallet ? 'yes' : 'no'}</td>
                   <td className="px-4 py-2">
-                    {agent.agent_uri ? (
-                      <a
-                        href={agent.agent_uri}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline underline-offset-2"
-                      >
-                        link
-                      </a>
-                    ) : (
-                      <span className="text-zinc-600">—</span>
-                    )}
+                    {(() => {
+                      const href = safeExternalHref(agent.agent_uri);
+                      return href ? (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-2"
+                        >
+                          link
+                        </a>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))
