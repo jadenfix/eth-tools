@@ -1,0 +1,30 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "functions": {
+    "api/v1/[...path].rs":                   { "maxDuration": 30 },
+    "api/mcp/[...path].rs":                  { "maxDuration": 60 },
+    "api/cron/registry_scraper.rs":          { "maxDuration": 120 },
+    "api/cron/manifest_fetcher.rs":          { "maxDuration": 300 },
+    "api/cron/endpoint_prober.rs":           { "maxDuration": 300 },
+    "api/cron/reputation_aggregator.rs":     { "maxDuration": 120 },
+    "api/cron/validation_aggregator.rs":     { "maxDuration": 120 },
+    "api/cron/wallet_rotation_watcher.rs":   { "maxDuration": 60 },
+    "api/cron/trust_score_recompute.rs":     { "maxDuration": 300 },
+    "api/cron/wallet_balance_keeper.rs":     { "maxDuration": 120 }
+  },
+  "crons": [
+    { "path": "/api/cron/wallet_rotation_watcher",  "schedule": "*/1 * * * *" },
+    { "path": "/api/cron/registry_scraper",         "schedule": "*/2 * * * *" },
+    { "path": "/api/cron/reputation_aggregator",    "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/validation_aggregator",    "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/manifest_fetcher",         "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/endpoint_prober",          "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/trust_score_recompute",    "schedule": "0 * * * *" },
+    { "path": "/api/cron/wallet_balance_keeper",    "schedule": "0 0 * * *" }
+  ],
+  "headers": [
+    { "source": "/llms.txt",     "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }] },
+    { "source": "/openapi.json", "headers": [{ "key": "Cache-Control", "value": "public, max-age=60" }] }
+  ]
+}

@@ -1,0 +1,16 @@
+[package]
+name = "eth-tools-workers"
+description = "Shared logic for the 8 autonomous worker agents"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+eth-tools-core.workspace = true
+eth-tools-rpc.workspace = true
+eth-tools-db.workspace = true

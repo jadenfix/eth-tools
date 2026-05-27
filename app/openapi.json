@@ -1,0 +1,37 @@
+{
+  "info": {
+    "description": "Self-maintaining runtime for ERC-8004 trustless agents.",
+    "license": {
+      "name": "MIT"
+    },
+    "title": "eth-tools API",
+    "version": "0.0.1"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "summary": "Service health and per-chain freshness"
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Production",
+      "url": "https://eth-tools.dev"
+    },
+    {
+      "description": "Preview",
+      "url": "https://preview.eth-tools.dev"
+    },
+    {
+      "description": "Local dev",
+      "url": "http://localhost:3000"
+    }
+  ]
+}

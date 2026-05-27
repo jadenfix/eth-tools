@@ -1,0 +1,13 @@
+{
+  "description": "Missing required `name` field; `services[0].endpoint` is not a URL.",
+  "services": [
+    {
+      "type": "web",
+      "endpoint": "not-a-url"
+    },
+    {
+      "type": "INVALID_TYPE",
+      "endpoint": "https://example.com/x"
+    }
+  ]
+}

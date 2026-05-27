@@ -1,0 +1,6 @@
+avoid-breaking-exported-api = false
+msrv = "1.82.0"
+
+# Plan §10.5 #1 enforcement: refuse Debug-printing of `std::env::var(...)` results
+# inside any module that touches the wallet path. Specific deny lints are
+# configured per-crate via #![deny(...)] in `crates/payments/src/lib.rs`.

@@ -1,0 +1,33 @@
+name: Migrate production database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/db/migrations/**'
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    name: sqlx migrate run
+    runs-on: ubuntu-latest
+    environment:
+      name: production       # GitHub environment with required reviewer
+      url: https://eth-tools.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --version "^0.8" --no-default-features --features postgres,rustls
+
+      - name: Run migrations against Neon (unpooled, transactional)
+        env:
+          DATABASE_URL: ${{ secrets.NEON_PROD_URL_UNPOOLED }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::NEON_PROD_URL_UNPOOLED secret is not set. Configure under Settings → Environments → production."
+            exit 1
+          fi
+          sqlx migrate run --source crates/db/migrations

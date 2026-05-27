@@ -1,0 +1,8 @@
+# Repo-wide ownership
+*                              @jadenfix
+
+# Security-critical paths require explicit review (mirrors plan §10.5).
+crates/payments/               @jadenfix
+api/cron/wallet_*.rs           @jadenfix
+.github/workflows/migrate-*    @jadenfix
+crates/db/migrations/          @jadenfix

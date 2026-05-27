@@ -1,0 +1,21 @@
+[package]
+name = "eth-tools-dev-server"
+description = "Local development server — mounts the production Axum handlers on 127.0.0.1:3000"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "dev-server"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+eth-tools-api.workspace = true

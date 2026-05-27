@@ -1,0 +1,15 @@
+target/
+node_modules/
+.git/
+.next/
+.env
+.env.*
+!.env.example
+docker-compose.yml
+docs/
+fixtures/
+test-results/
+playwright-report/
+coverage/
+**/*.md
+!README.md
