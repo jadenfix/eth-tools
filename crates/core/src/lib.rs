@@ -9,7 +9,9 @@ pub mod manifest;
 pub use chains::{Chain, CHAINS};
 pub use denied_reason::DeniedReason;
 pub use errors::Error;
-pub use events::{
-    MetadataSet, Registered, Transfer, URIUpdated, METADATA_SET_TOPIC, REGISTERED_TOPIC, TRANSFER_TOPIC,
-    URI_UPDATED_TOPIC,
-};
+
+// Intentionally NOT re-exporting events at the crate root.
+// `Transfer` collides with ERC-20 / ERC-721 / ERC-1155 / DEX events; flattening
+// the ERC-8004 event names at the crate root would create a guaranteed naming
+// conflict the first time a worker adds ERC-20 support. Callers must spell out
+// `eth_tools_core::events::Registered` etc.

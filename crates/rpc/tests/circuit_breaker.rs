@@ -116,6 +116,51 @@ async fn all_open_returns_all_providers_open() {
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn half_open_probe_failure_rearms_cooldown() {
+    // Regression: previously, a failed half-open probe reset the failure
+    // counter to 0, decided the (now zero) counter didn't meet threshold, and
+    // left `opened_at` at the original trip time — so `should_attempt_probe`
+    // immediately returned true again. Result: every call after the first
+    // cooldown spammed the dead provider with another probe.
+    let (p1, p2, rotator) = build_rotator();
+
+    // Trip primary.
+    for _ in 0..BREAKER_THRESHOLD {
+        p1.push_block_number(Err(RpcError::Transient("500".into())));
+        p2.push_block_number(Ok(1));
+    }
+    for _ in 0..BREAKER_THRESHOLD {
+        let _ = rotator.get_block_number().await.unwrap();
+    }
+    assert!(rotator.health().await[0].opened);
+
+    // Advance past cooldown, then issue ONE failed probe.
+    tokio::time::advance(BREAKER_COOLDOWN + Duration::from_secs(1)).await;
+    p1.push_block_number(Err(RpcError::Transient("still down".into())));
+    p2.push_block_number(Ok(2));
+    let n = rotator.get_block_number().await.unwrap();
+    assert_eq!(n, 2, "fallback handles call after primary's probe fails");
+    assert!(
+        rotator.health().await[0].opened,
+        "primary still open after failed probe"
+    );
+
+    // The NEXT call within cooldown must NOT issue a new probe to primary.
+    // If we queue no primary response and one fallback response, a regression
+    // would consume from p1 (panic) or call into the empty p1 queue.
+    p2.push_block_number(Ok(3));
+    let n = rotator.get_block_number().await.unwrap();
+    assert_eq!(n, 3, "call routed to fallback, NOT a re-probe to primary");
+
+    // Advance the full cooldown again — now a fresh probe is allowed.
+    tokio::time::advance(BREAKER_COOLDOWN + Duration::from_secs(1)).await;
+    p1.push_block_number(Ok(99));
+    let n = rotator.get_block_number().await.unwrap();
+    assert_eq!(n, 99, "after full cooldown, primary is probed again");
+    assert!(!rotator.health().await[0].opened, "successful probe closed primary");
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn permanent_error_does_not_trip_breaker() {
     let (p1, _p2, rotator) = build_rotator();
 

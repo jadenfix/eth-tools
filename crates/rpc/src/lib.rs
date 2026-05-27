@@ -176,9 +176,28 @@ impl BreakerState {
     }
 
     fn record_transient_failure(&mut self, now: Instant) {
-        // Reset the counter if the window has expired.
+        // If we're already open, this is a half-open probe that failed.
+        // Re-arm cooldown so we don't spam the dead provider one call later —
+        // the previous implementation reset the failure counter, decided the
+        // (now zero) counter didn't meet the threshold, and left `opened_at`
+        // pointing at the original trip time, which `should_attempt_probe`
+        // then treated as "cooldown has elapsed → probe again immediately."
+        // Re-arming `opened_at = Some(now)` puts the breaker back into the
+        // "wait `BREAKER_COOLDOWN` seconds" state on every failed probe.
+        if self.opened_at.is_some() {
+            self.opened_at = Some(now);
+            self.half_open_probe_inflight = false;
+            // Reset the rolling-window state so when the breaker eventually
+            // closes (next successful probe), we start fresh.
+            self.failures_in_window = 0;
+            self.window_started_at = None;
+            self.push_outcome(now, false);
+            return;
+        }
+
+        // Closed-state failure: walk the rolling window.
         if let Some(start) = self.window_started_at {
-            if now.duration_since(start) > BREAKER_WINDOW {
+            if now.duration_since(start) >= BREAKER_WINDOW {
                 self.failures_in_window = 0;
                 self.window_started_at = None;
             }
