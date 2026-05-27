@@ -58,8 +58,7 @@ jobs:
       - name: cargo audit
         run: cargo audit --deny warnings || true   # advisory-only until first real PR
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+        # version pinned via `packageManager` field in package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -73,8 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+        # version pinned via `packageManager` field in package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22

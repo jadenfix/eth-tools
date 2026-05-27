@@ -1,10 +1,18 @@
 //! The 8 autonomous worker agents (plan §3). Each cron function under
-//! `api/cron/*.rs` is a thin wrapper over `run(<worker>)` defined here.
+//! `api/cron/*.rs` is a thin wrapper that calls `cron::serve(name, req, body)`.
 //!
-//! Bootstrap version: every worker returns an "ok, no-op" summary.
-//! Real scraping/probing/aggregating lands in subsequent PRs.
+//! `cron::serve` enforces the per-worker invariants from plan §3:
+//!  - **Cron secret check** — fail-closed in production if `CRON_SECRET` is unset
+//!    (this is the security hole the deep review caught).
+//!  - **Env-aware skip** — non-production environments no-op (plan §11.5).
+//!  - **Dry-run mode** via `?dryrun=1`.
+//!  - **Telemetry** — `WorkerSummary` is the wire shape for `worker_runs`.
+//!
+//! Real worker bodies (scraping, fetching, probing) land in Phase 4.
 
 use serde::Serialize;
+
+pub mod cron;
 
 #[derive(Debug, Serialize)]
 pub struct WorkerSummary {
@@ -40,6 +48,10 @@ impl WorkerSummary {
             skipped: true,
             reason: Some(reason),
         }
+    }
+    pub fn dryrun(mut self) -> Self {
+        self.dryrun = true;
+        self
     }
 }
 

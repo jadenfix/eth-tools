@@ -28,6 +28,22 @@ build/
 # macOS
 .DS_Store
 
+# Key material — defence in depth against accidental commits
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+id_rsa*
+id_ed25519*
+*.gpg
+secrets.*
+.envrc
+
+# Agent caches
+.claude/
+.cursor/cache/
+
 # Test artifacts
 test-results/
 playwright-report/

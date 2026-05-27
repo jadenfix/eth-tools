@@ -390,9 +390,12 @@ dependencies = [
  "eth-tools-core",
  "eth-tools-db",
  "eth-tools-rpc",
+ "http",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
+ "vercel_runtime",
 ]
 
 [[package]]

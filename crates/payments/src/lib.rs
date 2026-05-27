@@ -35,13 +35,26 @@ pub mod wallet {
     pub const PRIVATE_KEY_ENV: &str = "EVM_PRIVATE_KEY";
 }
 
-// Compile-time invariants — promoted from runtime tests so changes to the
-// constants fail the build, not just the test suite.
+// Compile-time invariants — promoted from runtime tests so weakening the
+// constants fails the build, not just the test suite.
 const _BALANCE_GE_4X_DAILY: () = {
     assert!(wallet::MAX_BALANCE_USD_CENTS >= wallet::MAX_DAILY_SPEND_USD_CENTS * 4);
 };
 const _BASE_MAINNET_ONLY: () = {
     assert!(wallet::ALLOWED_CHAIN_ID == 8453);
+};
+const _GAS_CAP_REASONABLE: () = {
+    // Above 1M gas, a single tx can cost dollars on Base spikes.
+    assert!(wallet::MAX_PER_TX_GAS <= 1_000_000);
+};
+const _RECIPIENTS_ARE_REGISTRIES: () = {
+    assert!(wallet::ALLOWED_RECIPIENTS_HEX.len() == 3);
+    // Length check at compile time; full hex validation in the test below.
+    let mut i = 0;
+    while i < wallet::ALLOWED_RECIPIENTS_HEX.len() {
+        assert!(wallet::ALLOWED_RECIPIENTS_HEX[i].len() == 40);
+        i += 1;
+    }
 };
 
 #[cfg(test)]
