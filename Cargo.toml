@@ -29,21 +29,39 @@ serde_json = "1"
 http = "1"
 async-trait = "0.1"
 clap = { version = "4", features = ["derive", "env"] }
-axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio"] }
+axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio", "query"] }
 tower = { version = "0.5", default-features = false, features = ["util"] }
 tower-http = { version = "0.6", default-features = false, features = ["trace", "cors"] }
 vercel_runtime = "1.1"   # 2.x has Service-based API break; migrate as part of Phase 1 when handlers are rewritten
 subtle = "2"
 sha2 = "0.10"
 
+# Phase 1 additions
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "migrate", "uuid", "bigdecimal", "chrono", "json"] }
+bigdecimal = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+alloy = { version = "1", default-features = false, features = ["sol-types", "rlp"] }
+alloy-primitives = { version = "1", default-features = false, features = ["serde"] }
+jsonschema = { version = "0.30", default-features = false }
+utoipa = { version = "5", features = ["chrono", "uuid"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
+base64 = "0.22"
+url = "2"
+
+# dev-only (tests)
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }
+
 # Workspace member crates
-eth-tools-core      = { path = "crates/core" }
-eth-tools-api       = { path = "crates/api" }
-eth-tools-mcp       = { path = "crates/mcp" }
-eth-tools-workers   = { path = "crates/workers" }
-eth-tools-payments  = { path = "crates/payments" }
-eth-tools-db        = { path = "crates/db" }
-eth-tools-rpc       = { path = "crates/rpc" }
+eth-tools-core        = { path = "crates/core" }
+eth-tools-api         = { path = "crates/api" }
+eth-tools-mcp         = { path = "crates/mcp" }
+eth-tools-workers     = { path = "crates/workers" }
+eth-tools-payments    = { path = "crates/payments" }
+eth-tools-db          = { path = "crates/db" }
+eth-tools-rpc         = { path = "crates/rpc" }
+eth-tools-openapi-gen = { path = "crates/openapi-gen" }
 
 # ---- Root package (Vercel function entrypoints) ----
 [dependencies]
@@ -54,12 +72,15 @@ serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 http.workspace = true
+axum.workspace = true
+tower.workspace = true
 vercel_runtime.workspace = true
 
 eth-tools-api.workspace = true
 eth-tools-mcp.workspace = true
 eth-tools-workers.workspace = true
 eth-tools-core.workspace = true
+eth-tools-db.workspace = true
 
 [[bin]]
 name = "api_v1"

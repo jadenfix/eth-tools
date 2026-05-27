@@ -1,19 +1,49 @@
-//! Postgres schema + typed queries. Bootstrap stub — sqlx integration lands in
-//! the next PR once Neon is provisioned. The canonical schema lives in
-//! `migrations/0001_init.up.sql` (paired with `0001_init.down.sql` — sqlx-cli's
-//! reversible-migration convention).
+//! Postgres schema + typed queries.
+//!
+//! Migrations live in `crates/db/migrations/` paired up/down per sqlx
+//! convention. `connect()` opens a pgbouncer-friendly pool; `migrate()` runs
+//! all pending migrations in a transaction.
+//!
+//! Query layer uses non-macro `sqlx::query`/`query_as` for now so CI builds
+//! without a live DB. The `query!` macro upgrade lands in a follow-up once a
+//! `.sqlx/` offline cache is committed and CI sets `SQLX_OFFLINE=true`.
 
-pub const LATEST_MIGRATION: &str = "0001_init";
+use sqlx::postgres::{PgPool, PgPoolOptions};
+use std::time::Duration;
+
+pub mod agents;
+pub mod chains_seed;
+
+pub use sqlx::PgPool as Pool;
+
+pub const LATEST_MIGRATION: &str = "0002_chains_seed";
+
+/// Build a Postgres pool sized for PgBouncer (Neon's pooler default is
+/// transaction-mode with 100 connections). Conservative `max_connections` so
+/// many concurrent function invocations don't exhaust the pooler.
+pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    PgPoolOptions::new()
+        .max_connections(8)
+        .acquire_timeout(Duration::from_secs(5))
+        .idle_timeout(Duration::from_secs(300))
+        .connect(database_url)
+        .await
+}
+
+/// Apply all pending migrations from `crates/db/migrations/`. Wrapped in a
+/// transaction by sqlx; failure rolls back. Call before serving requests.
+pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::migrate::MigrateError> {
+    sqlx::migrate!("./migrations").run(pool).await
+}
 
 #[cfg(test)]
-mod tests {
+mod migration_tests {
     use super::*;
     use std::path::PathBuf;
 
-    /// Asserts every up-migration in `crates/db/migrations/` has a matching down.
-    /// Catches a real bug (forgetting the down) at test time, not in prod.
+    /// Every up-migration in `crates/db/migrations/` has a paired down.
     #[test]
-    fn every_up_migration_has_a_down() {
+    fn every_up_has_a_down() {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
         let entries: Vec<_> = std::fs::read_dir(&dir)
             .expect("migrations dir must exist")
@@ -27,11 +57,10 @@ mod tests {
                 "missing matching down migration for {up}"
             );
         }
-        // Sanity: at least one migration pair exists.
         assert!(
             entries.iter().any(|f| f.ends_with(".up.sql")),
             "no up migrations found"
         );
-        assert!(LATEST_MIGRATION.starts_with("0001"));
+        assert!(LATEST_MIGRATION.starts_with("0002"));
     }
 }
