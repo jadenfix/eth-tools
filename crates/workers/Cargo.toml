@@ -16,14 +16,14 @@ subtle.workspace = true
 sha2.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 alloy.workspace = true
+http = { workspace = true }
+sqlx = { workspace = true }
 eth-tools-core.workspace = true
 eth-tools-rpc.workspace = true
 eth-tools-db.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
-http = { workspace = true }
-sqlx = { workspace = true }
 chrono = { workspace = true }
 testcontainers.workspace = true
 testcontainers-modules.workspace = true

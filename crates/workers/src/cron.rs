@@ -32,11 +32,7 @@ use eth_tools_db::worker_runs;
 /// [`serve_with_context`] instead — it provides the pool + rpc + force flag.
 ///
 /// PR3 deletes this shim once the wrappers migrate.
-pub async fn serve<F, Fut>(
-    worker_name: &'static str,
-    req: Request,
-    body: F,
-) -> Result<Response<Body>, Error>
+pub async fn serve<F, Fut>(worker_name: &'static str, req: Request, body: F) -> Result<Response<Body>, Error>
 where
     F: FnOnce(bool) -> Fut,
     Fut: Future<Output = Result<WorkerSummary, Error>>,
@@ -49,9 +45,9 @@ where
     // BUT we must NOT call serve_with_context here, because that would
     // try to init `context::deps()` even for the stub callers (which have
     // no DATABASE_URL in dev). Instead we run the guards inline.
-    Ok(serve_legacy_inner(worker_name, req, body).await.unwrap_or_else(|e| {
-        internal_error(worker_name, &e.to_string())
-    }))
+    Ok(serve_legacy_inner(worker_name, req, body)
+        .await
+        .unwrap_or_else(|e| internal_error(worker_name, &e.to_string())))
 }
 
 /// **New M1-refactor entrypoint.** Closure receives a [`WorkerContext`]
@@ -61,11 +57,7 @@ where
 /// On any internal failure (auth, deps init, body error) returns a
 /// well-formed `Response` rather than propagating `Result::Err` — Vercel
 /// cron paths must always emit a status, never a panic.
-pub async fn serve_with_context<F, Fut>(
-    worker_name: &'static str,
-    req: Request,
-    body: F,
-) -> Response<Body>
+pub async fn serve_with_context<F, Fut>(worker_name: &'static str, req: Request, body: F) -> Response<Body>
 where
     F: FnOnce(WorkerContext) -> Fut,
     Fut: Future<Output = Result<WorkerSummary, Error>>,
@@ -145,10 +137,47 @@ where
 
     // Dry-run skips the audit row (plan §3 invariant 4: "runs all reads
     // but skips writes"). HTTP response is still 200 so callers can verify
-    // the read path.
+    // the read path. Dryrun also skips the advisory lock — read-only paths
+    // are inherently idempotent and double-execution is harmless.
     if dryrun {
         let mut summary = body(ctx).await?;
         summary.dryrun = true;
+        return ok_json(&summary);
+    }
+
+    // Plan §3 invariant #1: concurrency lock via Postgres advisory lock.
+    // Vercel triggers a second cron instance while the first is still
+    // running (per https://vercel.com/docs/cron-jobs#cron-job-considerations);
+    // without this lock two scrapers would race and double-write events.
+    //
+    // We use `pg_try_advisory_xact_lock` (transaction-scoped) rather than
+    // session-scoped because Neon's pooled DATABASE_URL runs PgBouncer in
+    // transaction mode — session locks would leak across connections.
+    // The lock holder transaction is kept open for the entire worker body;
+    // it commits at the end, releasing the lock atomically. If the function
+    // panics or aborts, the transaction rolls back (also releasing).
+    //
+    // `hashtext` returns int4; cast to bigint for the single-arg
+    // `pg_try_advisory_xact_lock(int8)` form. Collision space is 2^32 — at
+    // 8 workers it is effectively zero.
+    let mut lock_tx = deps
+        .pool
+        .begin()
+        .await
+        .map_err(|e| Error::from(format!("lock tx begin failed: {e}")))?;
+    let lock_key = format!("worker_{worker_name}");
+    let (acquired,): (bool,) = sqlx::query_as("SELECT pg_try_advisory_xact_lock(hashtext($1)::bigint)")
+        .bind(&lock_key)
+        .fetch_one(&mut *lock_tx)
+        .await
+        .map_err(|e| Error::from(format!("advisory lock query failed: {e}")))?;
+    if !acquired {
+        // Another invocation holds the lock. Return 200 with skipped so
+        // Vercel doesn't retry (it doesn't anyway, but be explicit).
+        // Do not write a worker_runs row — the holder is the canonical run.
+        let _ = lock_tx.rollback().await;
+        tracing::info!(worker = worker_name, "skipped: advisory lock held");
+        let summary = WorkerSummary::skipped(worker_name, "already_running");
         return ok_json(&summary);
     }
 
@@ -162,6 +191,11 @@ where
             // progress.
             tracing::error!(worker = worker_name, error = %e, "worker_runs::begin failed; running un-audited");
             let summary = body(ctx).await?;
+            // Best-effort release; if commit fails the rollback on drop
+            // still releases the xact lock.
+            if let Err(ce) = lock_tx.commit().await {
+                tracing::warn!(worker = worker_name, error = %ce, "lock tx commit failed; rollback will still release");
+            }
             return ok_json(&summary);
         }
     };
@@ -189,6 +223,11 @@ where
             }
         }
     }
+    // Release the advisory lock. If commit fails we log and let the tx
+    // Drop rollback; either way the lock is released before we return.
+    if let Err(ce) = lock_tx.commit().await {
+        tracing::warn!(worker = worker_name, error = %ce, "lock tx commit failed; rollback will release");
+    }
     let summary = result?;
     ok_json(&summary)
 }
@@ -201,9 +240,20 @@ fn check_cron_secret(
     env: &str,
     is_prod: bool,
 ) -> Result<Option<Response<Body>>, Error> {
-    let provided = req.headers().get("x-vercel-cron-secret");
+    // Vercel cron auto-injects `Authorization: Bearer ${CRON_SECRET}` per
+    // https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs.
+    // Earlier drafts read a custom `x-vercel-cron-secret` header — Vercel
+    // does NOT send this; reads of that header in production silently 401
+    // every real cron tick. PR #1 fixed it on the infrastructure branch;
+    // this fn was reintroduced in the worker-substrate rewrite and
+    // regressed the fix until the Phase-4-PR2 audit caught it.
+    let provided = req
+        .headers()
+        .get(http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer ").or_else(|| s.strip_prefix("bearer ")));
     let expected = std::env::var("CRON_SECRET").ok();
-    let secret_ok = match (expected.as_deref(), provided.and_then(|v| v.to_str().ok())) {
+    let secret_ok = match (expected.as_deref(), provided) {
         (Some(exp), Some(got)) => constant_time_eq_str(exp, got),
         (None, _) if !is_prod => true,
         _ => false,
@@ -320,7 +370,7 @@ mod tests {
         std::env::set_var("CRON_SECRET", "right");
         let r = serve(
             "test_w",
-            req_with(&[("x-vercel-cron-secret", "wrong")], None),
+            req_with(&[("authorization", "Bearer wrong")], None),
             |_| async { Ok(WorkerSummary::ok("test_w")) },
         )
         .await
@@ -331,7 +381,7 @@ mod tests {
         // does not write audit row).
         let r = serve(
             "test_w",
-            req_with(&[("x-vercel-cron-secret", "right")], None),
+            req_with(&[("authorization", "Bearer right")], None),
             |_| async { Ok(WorkerSummary::ok("test_w")) },
         )
         .await
@@ -342,7 +392,7 @@ mod tests {
         // dryrun=true.
         let r = serve(
             "test_w",
-            req_with(&[("x-vercel-cron-secret", "right")], Some("dryrun=1")),
+            req_with(&[("authorization", "Bearer right")], Some("dryrun=1")),
             |dr| async move {
                 assert!(dr, "body should see dryrun=true");
                 Ok(WorkerSummary::ok("test_w"))
@@ -378,36 +428,64 @@ mod tests {
         // timing).
         let r = serve(
             "test_w",
-            req_with(&[("x-vercel-cron-secret", "configuredXX")], None),
+            req_with(&[("authorization", "Bearer configuredXX")], None),
             |_| async { panic!("body should not run on length-mismatched secret") },
         )
         .await
         .unwrap();
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
-        // Case 8: HTTP headers are case-insensitive — capitalized variant
-        // works.
+        // Case 8: HTTP headers are case-insensitive — capitalized header
+        // name and lowercase Bearer scheme both work.
         let r = serve(
             "test_w",
-            req_with(&[("X-Vercel-Cron-Secret", "configured")], None),
+            req_with(&[("Authorization", "Bearer configured")], None),
             |_| async { Ok(WorkerSummary::ok("test_w")) },
         )
         .await
         .unwrap();
         assert_eq!(r.status(), StatusCode::OK);
 
+        let r = serve(
+            "test_w",
+            req_with(&[("authorization", "bearer configured")], None),
+            |_| async { Ok(WorkerSummary::ok("test_w")) },
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.status(), StatusCode::OK);
+
+        // Case 8b: regression — legacy custom `x-vercel-cron-secret`
+        // header must NOT auth. Vercel does not send it; the worker
+        // substrate's serve_inner rewrite reintroduced reads of this
+        // header until the Phase-4-PR2 audit caught it.
+        let r = serve(
+            "test_w",
+            req_with(&[("x-vercel-cron-secret", "configured")], None),
+            |_| async { panic!("legacy x-vercel-cron-secret must NOT auth") },
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+
+        // Case 8c: malformed Authorization header (no Bearer scheme) → 401.
+        let r = serve(
+            "test_w",
+            req_with(&[("authorization", "configured")], None),
+            |_| async { panic!("Authorization without Bearer scheme must NOT auth") },
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+
         // Case 9: preview + ?force=1, no secret → bypasses env-skip; body
         // runs (legacy path, no deps).
         std::env::set_var("VERCEL_ENV", "preview");
         std::env::remove_var("CRON_SECRET");
-        let r = serve(
-            "test_w",
-            req_with(&[], Some("force=1")),
-            |dr| async move {
-                assert!(!dr);
-                Ok(WorkerSummary::ok("test_w"))
-            },
-        )
+        let r = serve("test_w", req_with(&[], Some("force=1")), |dr| async move {
+            assert!(!dr);
+            Ok(WorkerSummary::ok("test_w"))
+        })
         .await
         .unwrap();
         assert_eq!(r.status(), StatusCode::OK);

@@ -99,8 +99,7 @@ pub async fn deps() -> Result<&'static WorkerDeps, Error> {
 }
 
 async fn build_deps() -> Result<WorkerDeps, Error> {
-    let database_url = std::env::var("DATABASE_URL")
-        .map_err(|_| Error::from("DATABASE_URL not set"))?;
+    let database_url = std::env::var("DATABASE_URL").map_err(|_| Error::from("DATABASE_URL not set"))?;
     let pool = eth_tools_db::connect(&database_url)
         .await
         .map_err(|e| Error::from(format!("db connect failed: {e}")))?;
