@@ -53,8 +53,8 @@ impl RpcProvider for StubProvider {
 
     async fn get_balance(
         &self,
-        _addr: alloy::primitives::Address,
-    ) -> Result<alloy::primitives::U256, RpcError> {
+        _addr: alloy_primitives::Address,
+    ) -> Result<alloy_primitives::U256, RpcError> {
         Err(RpcError::Transient(
             "rpc backend not wired — PR3 TODO (StubProvider)".into(),
         ))

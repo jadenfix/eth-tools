@@ -22,9 +22,11 @@ use serde::Serialize;
 
 pub mod context;
 pub mod cron;
+pub mod kv;
 mod rpc_http;
 pub mod trust_score_recompute;
 pub mod wallet_balance_keeper;
+pub mod wallet_rotation_watcher;
 
 pub use context::{deps, WorkerContext, WorkerDeps};
 
