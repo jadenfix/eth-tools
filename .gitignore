@@ -1,0 +1,50 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Node / Next.js
+node_modules/
+.next/
+.turbo/
+dist/
+build/
+*.tsbuildinfo
+.pnpm-store/
+
+# Vercel
+.vercel/
+
+# Env files (commit only .env.example)
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store
+
+# Test artifacts
+test-results/
+playwright-report/
+coverage/
+
+# sqlx offline cache (committed for CI; uncomment to ignore)
+# .sqlx/
+
+# Local databases
+*.db
+*.sqlite
+
+# Generated types — committed; CI verifies no drift
+# app/lib/api-types.ts
+# app/openapi.json
+
+# Local logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
