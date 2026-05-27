@@ -25,15 +25,18 @@ jobs:
     name: rust (fmt · clippy · test · build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Actions pinned to commit SHAs; floating tags (`@v4`) are mutable and a
+      # compromised tag could backdoor a job that handles ERC-8004 signing.
+      # Trailing `# vX.Y.Z` is required so Dependabot can still bump us.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable@2026-05
         with:
           components: rustfmt, clippy
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
         with:
           shared-key: workspace
 
@@ -53,20 +56,25 @@ jobs:
     name: cargo audit · pnpm audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable@2026-05
+      - uses: Swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
         with:
           shared-key: workspace
       - name: Install cargo-audit
-        # `|| true` here is intentional: install fails on cache-hit since the
-        # binary is already present. The audit step below is NOT swallowed.
-        run: cargo install --locked cargo-audit || true
+        # `|| true` is intentional: install fails on cache-hit because the
+        # binary is already present. We then re-check `command -v` so that a
+        # genuine install failure (transient registry, network) does not let
+        # the next `cargo audit` step error with "command not found" and have
+        # the job pass green.
+        run: |
+          cargo install --locked cargo-audit || true
+          command -v cargo-audit || { echo "::error::cargo-audit not on PATH after install"; exit 1; }
       - name: cargo audit (fail on any advisory)
         run: cargo audit --deny warnings
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         # version pinned via `packageManager` field in package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -78,15 +86,15 @@ jobs:
     name: typescript (typecheck · lint · gen-check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         # version pinned via `packageManager` field in package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable@2026-05
+      - uses: Swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
         with:
           shared-key: workspace
 
