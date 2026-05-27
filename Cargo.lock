@@ -1470,7 +1470,9 @@ name = "eth-tools-workers"
 version = "0.0.1"
 dependencies = [
  "alloy",
+ "alloy-primitives",
  "async-trait",
+ "bigdecimal",
  "chrono",
  "eth-tools-core",
  "eth-tools-db",

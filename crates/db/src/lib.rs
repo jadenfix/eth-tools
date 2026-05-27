@@ -12,11 +12,13 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::time::Duration;
 
 pub mod agents;
+pub mod alerts;
 pub mod chains_seed;
 pub mod cursors;
 pub mod feedback;
 pub mod trust_scores;
 pub mod validations;
+pub mod wallet_txs;
 pub mod worker_runs;
 
 pub use sqlx::PgPool as Pool;

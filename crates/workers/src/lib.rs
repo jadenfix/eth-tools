@@ -24,6 +24,7 @@ pub mod context;
 pub mod cron;
 mod rpc_http;
 pub mod trust_score_recompute;
+pub mod wallet_balance_keeper;
 
 pub use context::{deps, WorkerContext, WorkerDeps};
 
