@@ -5,6 +5,7 @@ pub mod denied_reason;
 pub mod errors;
 pub mod events;
 pub mod manifest;
+pub mod ssrf;
 
 pub use chains::{Chain, CHAINS};
 pub use denied_reason::DeniedReason;

@@ -14,8 +14,13 @@ async-trait.workspace = true
 vercel_runtime.workspace = true
 subtle.workspace = true
 sha2.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "time"] }
 alloy.workspace = true
+reqwest.workspace = true
+url.workspace = true
+chrono.workspace = true
+bigdecimal.workspace = true
+sqlx.workspace = true
 eth-tools-core.workspace = true
 eth-tools-rpc.workspace = true
 eth-tools-db.workspace = true
@@ -27,3 +32,5 @@ sqlx = { workspace = true }
 chrono = { workspace = true }
 testcontainers.workspace = true
 testcontainers-modules.workspace = true
+wiremock.workspace = true
+serde_json.workspace = true
