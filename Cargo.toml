@@ -49,9 +49,18 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 base64 = "0.22"
 url = "2"
 
+# Phase 7 (CLI)
+directories = "5"
+comfy-table = { version = "7", default-features = false }
+webbrowser = "1"
+
 # dev-only (tests)
 testcontainers = "0.23"
 testcontainers-modules = { version = "0.11", features = ["postgres"] }
+wiremock = "0.6"
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
 
 # Workspace member crates
 eth-tools-core        = { path = "crates/core" }

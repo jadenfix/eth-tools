@@ -16,3 +16,14 @@ clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+reqwest.workspace = true
+directories.workspace = true
+comfy-table.workspace = true
+webbrowser.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true
+tempfile.workspace = true
+wiremock.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
