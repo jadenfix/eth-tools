@@ -33,13 +33,24 @@ where
     //    (preview / development) we skip the check to avoid friction when
     //    triggering workers manually from a dev shell.
     //
+    // Vercel cron auto-injects `Authorization: Bearer ${CRON_SECRET}` per
+    // https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs —
+    // NOT a custom `x-vercel-cron-secret` header. The earlier draft of the plan
+    // had the header name wrong; two prior deep reviews accepted it literally.
+    // The cost of the mistake: every real cron tick rejected 401 the moment
+    // worker bodies replace the current stubs.
+    //
     // Comparison uses `subtle::ConstantTimeEq` over fixed-size SHA-256 digests
     // of both inputs. Hashing first prevents the early-return-on-length-mismatch
     // that a naive `len == len && fold-xor` exposes (an attacker could probe the
     // secret's length via timing).
-    let provided = req.headers().get("x-vercel-cron-secret");
+    let provided = req
+        .headers()
+        .get(http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer ").or_else(|| s.strip_prefix("bearer ")));
     let expected = std::env::var("CRON_SECRET").ok();
-    let secret_ok = match (expected.as_deref(), provided.and_then(|v| v.to_str().ok())) {
+    let secret_ok = match (expected.as_deref(), provided) {
         (Some(exp), Some(got)) => constant_time_eq_str(exp, got),
         (None, _) if !is_prod => true,
         _ => false,
@@ -147,7 +158,7 @@ mod tests {
         std::env::set_var("CRON_SECRET", "right");
         let r = serve(
             "test_w",
-            req_with(&[("x-vercel-cron-secret", "wrong")], None),
+            req_with(&[("authorization", "Bearer wrong")], None),
             |_| async { Ok(WorkerSummary::ok("test_w")) },
         )
         .await
@@ -157,7 +168,7 @@ mod tests {
         // Case 3: production, correct secret → 200 (body ran).
         let r = serve(
             "test_w",
-            req_with(&[("x-vercel-cron-secret", "right")], None),
+            req_with(&[("authorization", "Bearer right")], None),
             |_| async { Ok(WorkerSummary::ok("test_w")) },
         )
         .await
@@ -167,7 +178,7 @@ mod tests {
         // Case 4: production, correct secret, ?dryrun=1 → body sees dryrun=true.
         let r = serve(
             "test_w",
-            req_with(&[("x-vercel-cron-secret", "right")], Some("dryrun=1")),
+            req_with(&[("authorization", "Bearer right")], Some("dryrun=1")),
             |dr| async move {
                 assert!(dr, "body should see dryrun=true");
                 Ok(WorkerSummary::ok("test_w"))
@@ -202,22 +213,53 @@ mod tests {
         // ct compare must still return false — correctness, not timing).
         let r = serve(
             "test_w",
-            req_with(&[("x-vercel-cron-secret", "configuredXX")], None),
+            req_with(&[("authorization", "Bearer configuredXX")], None),
             |_| async { panic!("body should not run on length-mismatched secret") },
         )
         .await
         .unwrap();
         assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
-        // Case 8: HTTP headers are case-insensitive — capitalized variant works.
+        // Case 8: HTTP headers are case-insensitive AND the scheme accepts
+        // lowercase "bearer" — both variants must work.
         let r = serve(
             "test_w",
-            req_with(&[("X-Vercel-Cron-Secret", "configured")], None),
+            req_with(&[("Authorization", "Bearer configured")], None),
             |_| async { Ok(WorkerSummary::ok("test_w")) },
         )
         .await
         .unwrap();
         assert_eq!(r.status(), StatusCode::OK);
+
+        let r = serve(
+            "test_w",
+            req_with(&[("authorization", "bearer configured")], None),
+            |_| async { Ok(WorkerSummary::ok("test_w")) },
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.status(), StatusCode::OK);
+
+        // Case 9: malformed authorization header (no Bearer prefix) → 401.
+        let r = serve(
+            "test_w",
+            req_with(&[("authorization", "configured")], None),
+            |_| async { panic!("body should not run without Bearer prefix") },
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+
+        // Case 10: x-vercel-cron-secret header is now IGNORED — Vercel doesn't
+        // send it. Regression coverage that we don't accidentally re-add support.
+        let r = serve(
+            "test_w",
+            req_with(&[("x-vercel-cron-secret", "configured")], None),
+            |_| async { panic!("legacy x-vercel-cron-secret header must NOT auth") },
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
         std::env::remove_var("VERCEL_ENV");
         std::env::remove_var("CRON_SECRET");
