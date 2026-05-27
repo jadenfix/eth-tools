@@ -22,6 +22,7 @@ use serde::Serialize;
 
 pub mod context;
 pub mod cron;
+pub mod manifest_fetcher;
 mod rpc_http;
 
 pub use context::{deps, WorkerContext, WorkerDeps};

@@ -20,10 +20,21 @@ eth-tools-core.workspace = true
 eth-tools-rpc.workspace = true
 eth-tools-db.workspace = true
 
+# W2 (manifest_fetcher) needs:
+#  - jsonschema for the ERC-8004 manifest validation pass
+#  - reqwest for the Vercel Blob upload (direct PUT, no extra dep)
+#  - bigdecimal for the agent_id NUMERIC(78,0) column
+jsonschema.workspace = true
+reqwest.workspace = true
+bigdecimal.workspace = true
+chrono.workspace = true
+sqlx.workspace = true
+
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "io-util", "net"] }
 http = { workspace = true }
 sqlx = { workspace = true }
 chrono = { workspace = true }
 testcontainers.workspace = true
 testcontainers-modules.workspace = true
+axum = { workspace = true }

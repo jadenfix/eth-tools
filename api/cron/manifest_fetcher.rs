@@ -1,5 +1,10 @@
 //! Cron worker W2 — fetch agentURI manifests, validate, store snapshots.
-//! Cadence: every 15 minutes.
+//! Cadence: every 15 minutes (vercel.json).
+//!
+//! The handler is a thin shim over `eth_tools_workers::cron::
+//! serve_with_context`. The real worker lives in
+//! `eth_tools_workers::manifest_fetcher::run` so it's unit-testable
+//! without the Vercel runtime boilerplate.
 
 use vercel_runtime::{run, Body, Error, Request, Response};
 
@@ -16,8 +21,10 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn handler(req: Request) -> Result<Response<Body>, Error> {
-    eth_tools_workers::cron::serve(WORKER_NAME, req, |_dryrun| async move {
-        Ok(eth_tools_workers::WorkerSummary::ok(WORKER_NAME))
-    })
-    .await
+    Ok(eth_tools_workers::cron::serve_with_context(
+        WORKER_NAME,
+        req,
+        |ctx| async move { eth_tools_workers::manifest_fetcher::run(ctx).await },
+    )
+    .await)
 }
