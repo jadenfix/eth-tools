@@ -18,7 +18,7 @@
     "gen:check": "bash scripts/gen-types.sh && git diff --exit-code app/openapi.json app/lib/api-types.ts"
   },
   "dependencies": {
-    "next": "15.0.3",
+    "next": "15.5.18",
     "next-auth": "5.0.0-beta.25",
     "react": "19.0.0",
     "react-dom": "19.0.0"
