@@ -14,16 +14,22 @@ use eth_tools_core::chains;
 use eth_tools_db::agents::{self, KeysetCursor, ListParams};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use utoipa::IntoParams;
 
 use crate::dto::{AgentDto, ListEnvelope, OneEnvelope};
 use crate::error::ApiError;
 use crate::AppState;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListQuery {
+    /// Max rows to return; clamped to [1, 200].
     #[serde(default = "default_limit")]
+    #[param(default = 50, minimum = 1, maximum = 200)]
     pub limit: i64,
+    /// Filter by chain name (e.g. 'base') or chain_id (e.g. '8453').
     pub chain: Option<String>,
+    /// Opaque keyset cursor from a prior response's next_cursor.
     pub cursor: Option<String>,
 }
 
@@ -64,6 +70,18 @@ fn decode_cursor(s: &str) -> Result<KeysetCursor, ApiError> {
     })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/agents",
+    tag = "agents",
+    operation_id = "agents_list",
+    params(ListQuery),
+    responses(
+        (status = 200, description = "List indexed agents (keyset-paginated)", body = crate::dto::AgentList),
+        (status = 400, description = "invalid cursor or query", body = crate::dto::ApiErrorBody),
+        (status = 500, description = "internal error", body = crate::dto::ApiErrorBody),
+    )
+)]
 pub async fn list(
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
@@ -129,6 +147,22 @@ pub async fn list(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/agents/{chain}/{agent_id}",
+    tag = "agents",
+    operation_id = "agents_get_one",
+    params(
+        ("chain" = String, Path, description = "Chain name (e.g. 'base') or chain_id (e.g. '8453')"),
+        ("agent_id" = String, Path, description = "uint256 as decimal string"),
+    ),
+    responses(
+        (status = 200, description = "Get a single agent by chain and id", body = crate::dto::AgentDetail),
+        (status = 400, description = "invalid agent id", body = crate::dto::ApiErrorBody),
+        (status = 404, description = "agent or chain not found", body = crate::dto::ApiErrorBody),
+        (status = 500, description = "internal error", body = crate::dto::ApiErrorBody),
+    )
+)]
 pub async fn get_one(
     State(state): State<AppState>,
     Path((chain, agent_id)): Path<(String, String)>,

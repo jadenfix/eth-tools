@@ -1,44 +1,228 @@
 {
+  "openapi": "3.1.0",
+  "info": {
+    "title": "eth-tools API",
+    "description": "Self-maintaining runtime for ERC-8004 trustless agents.",
+    "license": {
+      "name": "MIT"
+    },
+    "version": "0.0.1"
+  },
+  "servers": [
+    {
+      "url": "https://eth-tools.dev",
+      "description": "Production"
+    },
+    {
+      "url": "https://preview.eth-tools.dev",
+      "description": "Preview"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Local dev"
+    }
+  ],
+  "paths": {
+    "/api/v1/agents": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "agents_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max rows to return; clamped to [1, 200].",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "chain",
+            "in": "query",
+            "description": "Filter by chain name (e.g. 'base') or chain_id (e.g. '8453').",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque keyset cursor from a prior response's next_cursor.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List indexed agents (keyset-paginated)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid cursor or query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agents/{chain}/{agent_id}": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "agents_get_one",
+        "parameters": [
+          {
+            "name": "chain",
+            "in": "path",
+            "description": "Chain name (e.g. 'base') or chain_id (e.g. '8453')",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "uint256 as decimal string",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a single agent by chain and id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid agent id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "agent or chain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "operationId": "health_get",
+        "responses": {
+          "200": {
+            "description": "Service health, chain registry, indexed agent count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
   "components": {
     "schemas": {
-      "Agent": {
+      "AgentDetail": {
+        "type": "object",
+        "description": "Concrete instantiation of `OneEnvelope<AgentDto>` — see `AgentList`.",
+        "required": [
+          "data",
+          "staleness_ms",
+          "source"
+        ],
         "properties": {
-          "agent_id": {
-            "description": "uint256 as decimal string",
-            "example": "42",
-            "type": "string"
+          "data": {
+            "$ref": "#/components/schemas/AgentDto"
           },
-          "agent_uri": {
-            "nullable": true,
-            "type": "string"
+          "source": {
+            "type": "string",
+            "example": "db"
           },
-          "agent_wallet": {
-            "description": "0x-prefixed; cleared on ownership Transfer (spec gotcha)",
-            "nullable": true,
-            "type": "string"
-          },
-          "chain": {
-            "example": "base",
-            "type": "string"
-          },
-          "chain_id": {
-            "example": 8453,
-            "format": "int64",
-            "type": "integer"
-          },
-          "owner": {
-            "description": "0x-prefixed 20-byte hex",
-            "type": "string"
-          },
-          "registered_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
+          "staleness_ms": {
+            "type": "integer",
+            "format": "int64"
           }
-        },
+        }
+      },
+      "AgentDto": {
+        "type": "object",
         "required": [
           "chain",
           "chain_id",
@@ -47,70 +231,137 @@
           "registered_at",
           "updated_at"
         ],
-        "type": "object"
-      },
-      "AgentDetail": {
         "properties": {
-          "data": {
-            "$ref": "#/components/schemas/Agent"
+          "agent_id": {
+            "type": "string",
+            "description": "uint256 as decimal string",
+            "example": "42"
           },
-          "source": {
-            "type": "string"
+          "agent_uri": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
-          "staleness_ms": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "data",
-          "staleness_ms",
-          "source"
-        ],
-        "type": "object"
-      },
-      "AgentList": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/Agent"
-            },
-            "type": "array"
-          },
-          "next_cursor": {
-            "description": "Opaque; pass verbatim as ?cursor= to page",
-            "nullable": true,
-            "type": "string"
-          },
-          "source": {
-            "enum": [
-              "db",
-              "cache",
-              "rpc"
+          "agent_wallet": {
+            "type": [
+              "string",
+              "null"
             ],
-            "type": "string"
+            "description": "0x-prefixed; cleared on ownership Transfer (spec gotcha)"
           },
-          "staleness_ms": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "data",
-          "staleness_ms",
-          "source"
-        ],
-        "type": "object"
-      },
-      "ChainHealth": {
-        "properties": {
-          "agents_indexed": {
-            "format": "int64",
-            "type": "integer"
+          "chain": {
+            "type": "string",
+            "example": "base"
           },
           "chain_id": {
+            "type": "integer",
             "format": "int64",
-            "type": "integer"
+            "example": 8453
+          },
+          "owner": {
+            "type": "string",
+            "description": "0x-prefixed 20-byte hex"
+          },
+          "registered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentList": {
+        "type": "object",
+        "description": "Concrete instantiation of `ListEnvelope<AgentDto>` so the OpenAPI spec\nemits a stable `AgentList` schema name (utoipa generates synthetic names\nlike `ListEnvelope_AgentDto` for raw generic instantiations).",
+        "required": [
+          "data",
+          "staleness_ms",
+          "source"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentDto"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque; pass verbatim as ?cursor= to page"
+          },
+          "source": {
+            "type": "string",
+            "example": "db"
+          },
+          "staleness_ms": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ApiErrorBody": {
+        "type": "object",
+        "description": "Top-level error envelope returned by every non-2xx response.",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiErrorPayload"
+          }
+        }
+      },
+      "ApiErrorPayload": {
+        "type": "object",
+        "required": [
+          "code",
+          "policy_version",
+          "evaluator"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "AGENT_NOT_FOUND"
+          },
+          "evaluator": {
+            "type": "string",
+            "example": "api.lookup"
+          },
+          "override_hint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "policy_version": {
+            "type": "string",
+            "example": "v1"
+          }
+        }
+      },
+      "ChainHealth": {
+        "type": "object",
+        "required": [
+          "chain_id",
+          "name",
+          "is_testnet",
+          "agents_indexed"
+        ],
+        "properties": {
+          "agents_indexed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           },
           "is_testnet": {
             "type": "boolean"
@@ -118,222 +369,47 @@
           "name": {
             "type": "string"
           }
-        },
-        "required": [
-          "chain_id",
-          "name",
-          "is_testnet",
-          "agents_indexed"
-        ],
-        "type": "object"
-      },
-      "Error": {
-        "properties": {
-          "error": {
-            "properties": {
-              "code": {
-                "example": "AGENT_NOT_FOUND",
-                "type": "string"
-              },
-              "evaluator": {
-                "example": "api.lookup",
-                "type": "string"
-              },
-              "override_hint": {
-                "nullable": true,
-                "type": "string"
-              },
-              "policy_version": {
-                "example": "v1",
-                "type": "string"
-              }
-            },
-            "required": [
-              "code",
-              "policy_version",
-              "evaluator"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "error"
-        ],
-        "type": "object"
+        }
       },
       "Health": {
-        "properties": {
-          "agents_indexed": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "chains": {
-            "items": {
-              "$ref": "#/components/schemas/ChainHealth"
-            },
-            "type": "array"
-          },
-          "status": {
-            "enum": [
-              "ok"
-            ],
-            "type": "string"
-          },
-          "version": {
-            "type": "string"
-          }
-        },
+        "type": "object",
         "required": [
           "status",
           "version",
           "agents_indexed",
           "chains"
         ],
-        "type": "object"
+        "properties": {
+          "agents_indexed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "chains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChainHealth"
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "Always \"ok\" while the service is responding.",
+            "example": "ok"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
       }
     }
   },
-  "info": {
-    "description": "Self-maintaining runtime for ERC-8004 trustless agents.",
-    "license": {
-      "name": "MIT"
-    },
-    "title": "eth-tools API",
-    "version": "0.0.1"
-  },
-  "openapi": "3.0.0",
-  "paths": {
-    "/api/v1/agents": {
-      "get": {
-        "parameters": [
-          {
-            "description": "Filter by chain name (e.g. 'base') or chain_id (e.g. '8453')",
-            "in": "query",
-            "name": "chain",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "default": 50,
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Opaque keyset cursor from a prior response's next_cursor",
-            "in": "query",
-            "name": "cursor",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentList"
-                }
-              }
-            },
-            "description": "ok"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "invalid cursor or query"
-          }
-        },
-        "summary": "List indexed agents (keyset-paginated)"
-      }
-    },
-    "/api/v1/agents/{chain}/{agent_id}": {
-      "get": {
-        "parameters": [
-          {
-            "in": "path",
-            "name": "chain",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "uint256 as decimal string",
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentDetail"
-                }
-              }
-            },
-            "description": "ok"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "agent or chain not found"
-          }
-        },
-        "summary": "Get a single agent by chain and id"
-      }
-    },
-    "/api/v1/health": {
-      "get": {
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Health"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "summary": "Service health, chain registry, indexed agent count"
-      }
-    }
-  },
-  "servers": [
+  "tags": [
     {
-      "description": "Production",
-      "url": "https://eth-tools.dev"
+      "name": "health",
+      "description": "Liveness and chain registry"
     },
     {
-      "description": "Preview",
-      "url": "https://preview.eth-tools.dev"
-    },
-    {
-      "description": "Local dev",
-      "url": "http://localhost:3000"
+      "name": "agents",
+      "description": "Read-only ERC-8004 agent lookups"
     }
   ]
 }

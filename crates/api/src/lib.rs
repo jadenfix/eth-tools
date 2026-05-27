@@ -19,6 +19,7 @@ use eth_tools_db::Pool;
 pub mod dto;
 pub mod error;
 pub mod handlers;
+pub mod openapi;
 
 /// Shared state every handler can extract via `axum::extract::State`.
 /// Cheap to clone (the inner pool is Arc-backed) so we pass by value.

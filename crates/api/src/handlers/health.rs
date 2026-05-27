@@ -9,26 +9,41 @@ use axum::Json;
 use eth_tools_core::CHAINS;
 use serde::Serialize;
 use serde_json::Value;
+use utoipa::ToSchema;
 
 use crate::error::ApiError;
 use crate::AppState;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ChainHealth {
     pub chain_id: u64,
+    #[schema(value_type = String)]
     pub name: &'static str,
     pub is_testnet: bool,
     pub agents_indexed: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct Health {
+    /// Always "ok" while the service is responding.
+    #[schema(value_type = String, example = "ok")]
     pub status: &'static str,
+    #[schema(value_type = String)]
     pub version: &'static str,
     pub agents_indexed: i64,
     pub chains: Vec<ChainHealth>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/health",
+    tag = "health",
+    operation_id = "health_get",
+    responses(
+        (status = 200, description = "Service health, chain registry, indexed agent count", body = Health),
+        (status = 500, description = "internal error", body = crate::dto::ApiErrorBody),
+    )
+)]
 pub async fn get(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
     // Single grouped query instead of 1 + N per-chain COUNT(*). `/health` is
     // the canonical liveness probe — uptime monitors hit it often, so an N+1

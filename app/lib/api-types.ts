@@ -11,42 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List indexed agents (keyset-paginated) */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Filter by chain name (e.g. 'base') or chain_id (e.g. '8453') */
-                    chain?: string;
-                    limit?: number;
-                    /** @description Opaque keyset cursor from a prior response's next_cursor */
-                    cursor?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["AgentList"];
-                    };
-                };
-                /** @description invalid cursor or query */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Error"];
-                    };
-                };
-            };
-        };
+        get: operations["agents_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -62,40 +27,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a single agent by chain and id */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    chain: string;
-                    /** @description uint256 as decimal string */
-                    agent_id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["AgentDetail"];
-                    };
-                };
-                /** @description agent or chain not found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Error"];
-                    };
-                };
-            };
-        };
+        get: operations["agents_get_one"];
         put?: never;
         post?: never;
         delete?: never;
@@ -111,27 +43,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Service health, chain registry, indexed agent count */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Health"];
-                    };
-                };
-            };
-        };
+        get: operations["health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -144,7 +56,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        Agent: {
+        /** @description Concrete instantiation of `OneEnvelope<AgentDto>` — see `AgentList`. */
+        AgentDetail: {
+            data: components["schemas"]["AgentDto"];
+            /** @example db */
+            source: string;
+            /** Format: int64 */
+            staleness_ms: number;
+        };
+        AgentDto: {
             /**
              * @description uint256 as decimal string
              * @example 42
@@ -167,20 +87,30 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        AgentDetail: {
-            data: components["schemas"]["Agent"];
+        /** @description Concrete instantiation of `ListEnvelope<AgentDto>` so the OpenAPI spec
+         *     emits a stable `AgentList` schema name (utoipa generates synthetic names
+         *     like `ListEnvelope_AgentDto` for raw generic instantiations). */
+        AgentList: {
+            data: components["schemas"]["AgentDto"][];
+            /** @description Opaque; pass verbatim as ?cursor= to page */
+            next_cursor?: string | null;
+            /** @example db */
             source: string;
             /** Format: int64 */
             staleness_ms: number;
         };
-        AgentList: {
-            data: components["schemas"]["Agent"][];
-            /** @description Opaque; pass verbatim as ?cursor= to page */
-            next_cursor?: string | null;
-            /** @enum {string} */
-            source: "db" | "cache" | "rpc";
-            /** Format: int64 */
-            staleness_ms: number;
+        /** @description Top-level error envelope returned by every non-2xx response. */
+        ApiErrorBody: {
+            error: components["schemas"]["ApiErrorPayload"];
+        };
+        ApiErrorPayload: {
+            /** @example AGENT_NOT_FOUND */
+            code: string;
+            /** @example api.lookup */
+            evaluator: string;
+            override_hint?: string | null;
+            /** @example v1 */
+            policy_version: string;
         };
         ChainHealth: {
             /** Format: int64 */
@@ -190,23 +120,15 @@ export interface components {
             is_testnet: boolean;
             name: string;
         };
-        Error: {
-            error: {
-                /** @example AGENT_NOT_FOUND */
-                code: string;
-                /** @example api.lookup */
-                evaluator: string;
-                override_hint?: string | null;
-                /** @example v1 */
-                policy_version: string;
-            };
-        };
         Health: {
             /** Format: int64 */
             agents_indexed: number;
             chains: components["schemas"]["ChainHealth"][];
-            /** @enum {string} */
-            status: "ok";
+            /**
+             * @description Always "ok" while the service is responding.
+             * @example ok
+             */
+            status: string;
             version: string;
         };
     };
@@ -217,4 +139,131 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    agents_list: {
+        parameters: {
+            query?: {
+                /** @description Max rows to return; clamped to [1, 200]. */
+                limit?: number;
+                /** @description Filter by chain name (e.g. 'base') or chain_id (e.g. '8453'). */
+                chain?: string;
+                /** @description Opaque keyset cursor from a prior response's next_cursor. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List indexed agents (keyset-paginated) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentList"];
+                };
+            };
+            /** @description invalid cursor or query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    agents_get_one: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Chain name (e.g. 'base') or chain_id (e.g. '8453') */
+                chain: string;
+                /** @description uint256 as decimal string */
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Get a single agent by chain and id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            /** @description invalid agent id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description agent or chain not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service health, chain registry, indexed agent count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+            /** @description internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+}

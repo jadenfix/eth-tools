@@ -6,13 +6,16 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct DeniedReason {
     pub code: String,
     pub policy_version: String,
     pub evaluator: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "utoipa", schema(value_type = Option<Object>))]
     pub expected: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "utoipa", schema(value_type = Option<Object>))]
     pub got: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub override_hint: Option<String>,

@@ -10,3 +10,7 @@ version.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+utoipa = { workspace = true, optional = true }
+
+[features]
+utoipa = ["dep:utoipa"]

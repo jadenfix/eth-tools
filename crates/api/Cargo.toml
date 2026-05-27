@@ -19,8 +19,9 @@ bigdecimal.workspace = true
 chrono.workspace = true
 base64.workspace = true
 thiserror.workspace = true
+utoipa = { workspace = true, features = ["axum_extras"] }
 
-eth-tools-core.workspace = true
+eth-tools-core = { workspace = true, features = ["utoipa"] }
 eth-tools-db.workspace = true
 
 [dev-dependencies]
