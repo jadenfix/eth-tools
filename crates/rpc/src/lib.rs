@@ -33,6 +33,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use alloy::rpc::types::{Filter, Log};
+use alloy_primitives::{Address, U256};
 use async_trait::async_trait;
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -122,6 +123,17 @@ pub trait RpcProvider: Send + Sync {
     /// `eth_getLogs` for the **exact** filter the caller supplied. Pagination
     /// is the rotator's job (see `RotatingProvider::get_logs_paginated`).
     async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, RpcError>;
+
+    /// `eth_getBalance` against the latest block. Returns balance in wei as
+    /// a `U256`. Used by W8 (wallet_balance_keeper) to monitor the operator
+    /// EOA. Default impl returns `RpcError::Transient` so legacy providers
+    /// that haven't been upgraded surface as a rotator failover instead of
+    /// silently returning zero (which would mask a missing-balance bug).
+    async fn get_balance(&self, _addr: Address) -> Result<U256, RpcError> {
+        Err(RpcError::Transient(
+            "get_balance not implemented on this provider".into(),
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -352,6 +364,12 @@ impl RotatingProvider {
     /// Fetch the current `eth_blockNumber` with rotator failover.
     pub async fn get_block_number(&self) -> Result<u64, RpcError> {
         self.call(|p| async move { p.get_block_number().await }).await
+    }
+
+    /// Fetch the wei balance of `addr` at the latest block with rotator
+    /// failover. Used by W8 to check the operator wallet's funding level.
+    pub async fn get_balance(&self, addr: Address) -> Result<U256, RpcError> {
+        self.call(move |p| async move { p.get_balance(addr).await }).await
     }
 
     /// Fetch logs matching `filter` across `[start_block, end_block]` in

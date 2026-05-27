@@ -101,6 +101,12 @@ async fn serve_writes_worker_runs_and_skips_on_dryrun() {
         ) -> Result<Vec<alloy::rpc::types::Log>, RpcError> {
             Ok(vec![])
         }
+        async fn get_balance(
+            &self,
+            _addr: alloy::primitives::Address,
+        ) -> Result<alloy::primitives::U256, RpcError> {
+            Ok(alloy::primitives::U256::ZERO)
+        }
     }
 
     let deps = WorkerDeps {

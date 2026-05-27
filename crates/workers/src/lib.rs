@@ -23,6 +23,7 @@ use serde::Serialize;
 pub mod context;
 pub mod cron;
 mod rpc_http;
+pub mod trust_score_recompute;
 
 pub use context::{deps, WorkerContext, WorkerDeps};
 

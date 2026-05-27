@@ -1,5 +1,10 @@
 //! Cron worker W7 — materialize trust_scores from reputation + endpoint + manifest.
-//! Cadence: hourly.
+//! Cadence: hourly (`0 * * * *`).
+//!
+//! Thin wrapper: defers to `eth_tools_workers::cron::serve_with_context`
+//! for env-skip / cron-secret / telemetry, and to
+//! `eth_tools_workers::trust_score_recompute::run` for the actual
+//! recompute statement.
 
 use vercel_runtime::{run, Body, Error, Request, Response};
 
@@ -16,8 +21,8 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn handler(req: Request) -> Result<Response<Body>, Error> {
-    eth_tools_workers::cron::serve(WORKER_NAME, req, |_dryrun| async move {
-        Ok(eth_tools_workers::WorkerSummary::ok(WORKER_NAME))
+    Ok(eth_tools_workers::cron::serve_with_context(WORKER_NAME, req, |ctx| async move {
+        eth_tools_workers::trust_score_recompute::run(&ctx).await
     })
-    .await
+    .await)
 }
