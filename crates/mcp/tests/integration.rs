@@ -189,7 +189,9 @@ mod auth {
             std::sync::Arc::new(
                 rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
             ),
-            rmcp::transport::StreamableHttpServerConfig::default(),
+            // Share the same allowed-hosts config as production so the
+            // tests exercise the real DNS-rebinding guard surface.
+            eth_tools_mcp::build_mcp_config(),
         );
         let cfg = std::sync::Arc::new(AuthConfig::with_token(token));
         axum::Router::new()
@@ -232,15 +234,8 @@ mod auth {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[tokio::test]
-    async fn good_token_initialize_returns_2xx() {
-        // The spec's literal "good token → 200" requires a *valid* MCP
-        // initialize request through the gate, not just a passed-through
-        // empty body. We send the JSON-RPC handshake with rmcp's required
-        // `Accept: application/json, text/event-stream` header (SSE is the
-        // streaming transport rmcp negotiates back).
-        let app = router_with("secret-token");
-        let body = serde_json::json!({
+    fn initialize_body() -> serde_json::Value {
+        serde_json::json!({
             "jsonrpc": "2.0",
             "method": "initialize",
             "params": {
@@ -249,21 +244,35 @@ mod auth {
                 "clientInfo": {"name": "auth-test", "version": "0"}
             },
             "id": 1
-        });
-        let req = Request::builder()
+        })
+    }
+
+    fn initialize_request(host: &str, token: &str) -> Request<Body> {
+        Request::builder()
             .method("POST")
             .uri("/")
-            // rmcp's StreamableHttpService validates Host vs `allowed_hosts`
-            // (defaults to localhost/127.0.0.1/::1) as DNS-rebinding defense.
+            // rmcp's StreamableHttpService validates Host vs `allowed_hosts`.
             // `tower::ServiceExt::oneshot` doesn't synthesize a Host header
             // like a real client would, so we set it explicitly.
-            .header("host", "127.0.0.1")
-            .header("authorization", "Bearer secret-token")
+            .header("host", host)
+            .header("authorization", format!("Bearer {token}"))
             .header("content-type", "application/json")
             .header("accept", "application/json, text/event-stream")
-            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .body(Body::from(serde_json::to_vec(&initialize_body()).unwrap()))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn good_token_initialize_returns_2xx() {
+        // The spec's literal "good token → 200" requires a *valid* MCP
+        // initialize request through the gate, not just a passed-through
+        // empty body. Hit the public prod hostname (no `127.0.0.1`
+        // workaround) so this test locks in the deploy-ready allowlist.
+        let app = router_with("secret-token");
+        let resp = app
+            .oneshot(initialize_request("eth-tools.dev", "secret-token"))
+            .await
             .unwrap();
-        let resp = app.oneshot(req).await.unwrap();
         let status = resp.status();
         // Auth gate succeeded → middleware passed to rmcp → rmcp returned a
         // 2xx handshake response. If the gate had rejected, status would be
@@ -273,6 +282,28 @@ mod auth {
             status,
             StatusCode::UNAUTHORIZED,
             "good token must not be rejected by auth middleware"
+        );
+    }
+
+    /// Regression lock against B1 (Phase-5 MCP deep review): the rmcp
+    /// DNS-rebinding guard must admit `Host: eth-tools.dev` so prod
+    /// requests dispatch instead of returning 403.
+    #[tokio::test]
+    async fn host_eth_tools_dev_passes() {
+        let app = router_with("secret-token");
+        let resp = app
+            .oneshot(initialize_request("eth-tools.dev", "secret-token"))
+            .await
+            .unwrap();
+        let status = resp.status();
+        assert_ne!(
+            status,
+            StatusCode::FORBIDDEN,
+            "rmcp host allowlist must admit `eth-tools.dev`, got {status}"
+        );
+        assert!(
+            status.is_success(),
+            "initialize via prod Host header should 2xx, got {status}"
         );
     }
 }
