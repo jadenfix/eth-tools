@@ -10,6 +10,15 @@ use std::path::Path;
 /// Hard cap on a manifest payload (256 KiB). The server-side validator caps
 /// at the same value; loading more locally would just be wasted bytes — and
 /// pointing the CLI at `/dev/zero` or a tarball of zeros must not OOM.
+///
+// SYNC: this value MUST stay in lockstep with the server-side cap on
+// `POST /api/v1/manifest/validate` and `POST /api/v1/manifest/hash`.
+// Expected server location (route not yet landed):
+//   /Users/jadenfix/eth-tools-wt-phase7/api/v1/manifest/validate.rs
+//   /Users/jadenfix/eth-tools-wt-phase7/api/v1/manifest/hash.rs
+// TODO(server): once the route lands, promote this to a shared workspace
+// const (e.g. `eth_tools_core::limits::MANIFEST_MAX_BYTES`) and import it
+// here instead of redefining the literal.
 pub(crate) const MANIFEST_MAX_BYTES: usize = 256 * 1024;
 
 /// Read+parse a JSON manifest at `path`. Surfaced as its own function so the

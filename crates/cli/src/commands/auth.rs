@@ -122,6 +122,41 @@ mod tests {
     use std::cell::RefCell;
     use tempfile::tempdir;
 
+    /// `RealLoginIo::read_token` calls `rpassword::prompt_password`, which
+    /// opens `/dev/tty` directly (NOT stdin) — so an `assert_cmd` test that
+    /// pipes `</dev/null` to the child doesn't actually exercise the error
+    /// path on a developer box (where `/dev/tty` is still open).
+    ///
+    /// Strategy: only assert the no-tty error path when this process has
+    /// *itself* lost its controlling tty (typical of CI sandboxes and
+    /// `nohup`/`setsid` runners). On a developer box `/dev/tty` opens fine
+    /// and `prompt_password` would block waiting for keyboard input, so we
+    /// skip with a logged reason rather than hanging the test suite.
+    #[cfg(unix)]
+    #[test]
+    fn real_login_io_surfaces_sensible_error_without_tty() {
+        let tty_available = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/tty")
+            .is_ok();
+        if tty_available {
+            eprintln!(
+                "skipping real_login_io_surfaces_sensible_error_without_tty: \
+                 /dev/tty is open (interactive shell). Rerun under `setsid` \
+                 or in CI to exercise the no-tty path."
+            );
+            return;
+        }
+        let mut io = RealLoginIo;
+        let err = io.read_token().expect_err("no tty => must error");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("read API key from terminal"),
+            "error message should mention the terminal read step, got: {msg}"
+        );
+    }
+
     /// Records every interaction so tests can assert on order / arguments.
     struct FakeIo {
         token: String,

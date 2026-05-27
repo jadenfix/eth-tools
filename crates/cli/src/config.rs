@@ -141,6 +141,13 @@ pub fn clear(paths: &ConfigPaths) -> Result<()> {
 /// Open the credentials file in place and overwrite its bytes with zeros.
 /// Returns `NotFound` if the file is missing so the caller can suppress that
 /// case quietly.
+///
+/// Caveat (mirrors [`clear`]): on COW filesystems (APFS, btrfs, ZFS) and on
+/// SSDs with wear-leveling, the previous block may still live on-disk after
+/// the in-place write — the new zero bytes may be written to a *different*
+/// physical block while the original is merely unmapped. This is a
+/// best-effort hardening pass, not a guarantee of unrecoverability; it
+/// matches the `0600`/`0700` posture for the common ext4/xfs/HFS+ cases.
 fn shred_in_place(path: &Path) -> std::io::Result<()> {
     let mut f = std::fs::OpenOptions::new().read(true).write(true).open(path)?;
     let len = f.metadata()?.len();
@@ -232,6 +239,22 @@ mod tests {
         );
         assert!(rendered.contains("[REDACTED]"));
         assert!(rendered.contains("https://x"));
+
+        // Containers (Option, Vec, tuples) MUST inherit the manual Debug —
+        // i.e. they must format each element via `Credentials::fmt`, not
+        // derive a generic structural Debug that leaks the private field.
+        // Pin the contract so a future refactor away from `impl Debug` is
+        // caught here instead of in a log file.
+        let opt_rendered = format!("{:?}", Some(creds.clone()));
+        assert!(
+            !opt_rendered.contains("super-secret-token"),
+            "Option<Credentials> Debug must not leak token, got: {opt_rendered}"
+        );
+        let vec_rendered = format!("{:?}", vec![creds.clone(), creds.clone()]);
+        assert!(
+            !vec_rendered.contains("super-secret-token"),
+            "Vec<Credentials> Debug must not leak token, got: {vec_rendered}"
+        );
     }
 
     #[test]

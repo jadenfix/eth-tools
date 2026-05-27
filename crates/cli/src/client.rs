@@ -20,10 +20,21 @@ pub const DEFAULT_API_URL: &str = "https://eth-tools.dev";
 /// Rules:
 ///   * must parse with `url::Url`
 ///   * scheme must be `https`, OR `http` against a loopback host
-///   * loopback = IPv4 `127.0.0.0/8`, IPv6 `::1`, or literal `localhost`
+///   * loopback = IPv4 `127.0.0.0/8`, IPv6 `::1` (incl. IPv4-mapped
+///     `::ffff:127.0.0.1/104`), or literal `localhost`
+///   * MUST NOT contain `userinfo` (`user:pass@host`). reqwest preserves the
+///     userinfo through to the wire and injects a `Basic` auth header on every
+///     request — IN ADDITION to our Bearer token. A hostile `--api-url
+///     https://evil:creds@eth-tools.dev` would exfiltrate the typed `creds`
+///     to a trusted host with no validator firing.
 pub fn validate_api_url(raw: &str) -> Result<String> {
     let parsed =
         url::Url::parse(raw).with_context(|| format!("invalid --api-url {raw:?}: not a valid URL"))?;
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(anyhow!(
+            "--api-url must not contain userinfo (user:pass@host)"
+        ));
+    }
     match parsed.scheme() {
         "https" => {}
         "http" => {
@@ -47,7 +58,17 @@ pub fn validate_api_url(raw: &str) -> Result<String> {
 fn is_loopback_host(u: &url::Url) -> bool {
     match u.host() {
         Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => {
+            // `Ipv6Addr::is_loopback` is strict `::1` only. IPv4-mapped
+            // loopback (`::ffff:127.0.0.1`) routes to 127.0.0.1 on every
+            // common kernel, so a dev workflow that bracket-quotes the
+            // mapped form must still pass.
+            ip.is_loopback()
+                || ip
+                    .to_ipv4_mapped()
+                    .map(|v4| v4.is_loopback())
+                    .unwrap_or(false)
+        }
         Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
         None => false,
     }
@@ -227,5 +248,49 @@ mod tests {
     fn validate_rejects_garbage() {
         assert!(validate_api_url("not a url").is_err());
         assert!(validate_api_url("").is_err());
+    }
+
+    #[test]
+    fn validate_rejects_userinfo() {
+        // All three forms must be rejected — reqwest would otherwise inject a
+        // `Basic` header constructed from the userinfo on every request, in
+        // addition to our Bearer token, silently exfiltrating whatever the
+        // user pasted between `https://` and `@`.
+        for bad in [
+            "https://user@eth-tools.dev",
+            "https://user:pass@eth-tools.dev",
+            "https://:pass@eth-tools.dev",
+        ] {
+            let err = validate_api_url(bad).unwrap_err().to_string();
+            assert!(
+                err.contains("must not contain userinfo"),
+                "expected userinfo rejection for {bad}, got: {err}"
+            );
+        }
+        // Sanity: the bare host still passes.
+        assert!(validate_api_url("https://eth-tools.dev").is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_ipv4_mapped_loopback() {
+        // IPv4-mapped IPv6 loopback (`::ffff:127.0.0.1`) routes to 127.0.0.1
+        // on every common kernel — dev workflows that bracket-quote the
+        // mapped form must work.
+        for ok in [
+            "http://[::ffff:127.0.0.1]",
+            "http://[::ffff:127.0.0.1]:3000",
+        ] {
+            assert!(validate_api_url(ok).is_ok(), "expected ok: {ok}");
+        }
+    }
+
+    #[test]
+    fn validate_rejects_ipv4_mapped_remote() {
+        // `::ffff:8.8.8.8` is NOT loopback; combined with http it must be
+        // rejected by the https-only check.
+        let err = validate_api_url("http://[::ffff:8.8.8.8]")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("plaintext http://"), "unexpected error: {err}");
     }
 }
