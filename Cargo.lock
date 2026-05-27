@@ -1885,16 +1885,13 @@ dependencies = [
 name = "eth-tools-api"
 version = "0.0.1"
 dependencies = [
- "alloy-primitives",
  "axum",
  "base64",
  "bigdecimal",
  "chrono",
  "eth-tools-core",
  "eth-tools-db",
- "eth-tools-payments",
  "http",
- "reqwest",
  "serde",
  "serde_json",
  "sqlx",
@@ -1905,7 +1902,6 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
- "wiremock",
 ]
 
 [[package]]

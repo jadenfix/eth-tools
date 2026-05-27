@@ -19,11 +19,18 @@ bigdecimal.workspace = true
 chrono.workspace = true
 base64.workspace = true
 thiserror.workspace = true
+# Phase 6 x402 — HTTP client for the facilitator + address type for payTo
+reqwest.workspace = true
+alloy-primitives.workspace = true
 
 eth-tools-core.workspace = true
 eth-tools-db.workspace = true
+eth-tools-payments.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 testcontainers.workspace = true
 testcontainers-modules.workspace = true
+# Phase 6 x402 — stand up fake facilitator for handler tests
+wiremock.workspace = true
+tower.workspace = true

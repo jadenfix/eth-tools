@@ -19,17 +19,45 @@ use eth_tools_db::Pool;
 pub mod dto;
 pub mod error;
 pub mod handlers;
+pub mod x402_config;
+
+pub use x402_config::X402Config;
 
 /// Shared state every handler can extract via `axum::extract::State`.
-/// Cheap to clone (the inner pool is Arc-backed) so we pass by value.
+/// Cheap to clone (the inner pool is Arc-backed; reqwest::Client is internally
+/// Arc'd; X402Config is a small struct) so we pass by value.
 #[derive(Clone)]
 pub struct AppState {
     pub pool: Pool,
+    /// x402 payment configuration. `pay_to_address: None` means x402 is
+    /// disabled (dev mode); the gate becomes a no-op. See [`X402Config`].
+    pub x402: X402Config,
+    /// HTTP client used to talk to the x402 facilitator. Shared, connection-
+    /// pooled. Building a fresh client per request would defeat keep-alive.
+    pub http: reqwest::Client,
 }
 
 impl AppState {
+    /// Default constructor — reads x402 config from env (disabled if
+    /// `X402_PAY_TO_ADDRESS` unset). Used by the Vercel entrypoint and
+    /// dev-server.
     pub fn new(pool: Pool) -> Self {
-        Self { pool }
+        let x402 = X402Config::from_env_or_disabled();
+        Self::with_x402(pool, x402)
+    }
+
+    /// Explicit-x402 constructor. Tests + integration paths thread a
+    /// configured `X402Config` (with a wiremock facilitator URL) through
+    /// this.
+    pub fn with_x402(pool: Pool, x402: X402Config) -> Self {
+        // No-proxy + rustls — matches prod (Vercel functions have no
+        // outbound proxy). Build once, share via clone.
+        let http = reqwest::Client::builder()
+            .no_proxy()
+            .user_agent(concat!("eth-tools/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("reqwest client builds with static config");
+        Self { pool, x402, http }
     }
 }
 
@@ -42,6 +70,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/agents/:chain/:agent_id",
             axum::routing::get(handlers::agents::get_one),
+        )
+        .route(
+            "/api/v1/invoke",
+            axum::routing::post(handlers::invoke::post),
         )
         .fallback(handlers::not_found)
         .with_state(state)

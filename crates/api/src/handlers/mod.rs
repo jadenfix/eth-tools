@@ -6,6 +6,7 @@
 
 pub mod agents;
 pub mod health;
+pub mod invoke;
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;

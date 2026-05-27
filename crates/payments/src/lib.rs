@@ -14,6 +14,7 @@
 pub mod denials;
 pub mod edge_config;
 pub mod wallet;
+pub mod x402;
 
 pub use wallet::{
     ALLOWED_CHAIN_ID, ALLOWED_RECIPIENTS, ALLOWED_RECIPIENTS_HEX, KILL_SWITCH_KEY, MAX_BALANCE_USD_CENTS,
