@@ -1,0 +1,15 @@
+[package]
+name = "eth-tools-openapi-gen"
+description = "Build-time tool — dumps the utoipa OpenAPI doc to app/openapi.json"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "openapi-gen"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+serde_json.workspace = true

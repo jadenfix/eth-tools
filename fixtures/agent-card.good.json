@@ -1,0 +1,24 @@
+{
+  "name": "Example Risk Scorer",
+  "description": "Reads a wallet address, returns a risk score in [0, 100].",
+  "version": "0.1.0",
+  "owner": "0x000000000000000000000000000000000000dEaD",
+  "services": [
+    {
+      "type": "web",
+      "endpoint": "https://example.com/agents/risk-scorer"
+    },
+    {
+      "type": "A2A",
+      "endpoint": "https://example.com/agents/risk-scorer/a2a"
+    },
+    {
+      "type": "MCP",
+      "endpoint": "https://example.com/agents/risk-scorer/mcp"
+    }
+  ],
+  "skills": [
+    "wallet-risk",
+    "address-analysis"
+  ]
+}

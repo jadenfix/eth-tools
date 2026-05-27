@@ -1,0 +1,110 @@
+[package]
+name = "eth-tools-fns"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Vercel function entrypoints for eth-tools"
+
+[workspace]
+members = [".", "crates/*"]
+resolver = "2"
+
+# ---- Workspace package defaults (inherited by crates/*) ----
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/jadenfix/eth-tools"
+version = "0.0.1"
+
+# ---- Workspace dependencies (single source of truth) ----
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "1"
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+http = "1"
+async-trait = "0.1"
+clap = { version = "4", features = ["derive", "env"] }
+axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio"] }
+tower = { version = "0.5", default-features = false, features = ["util"] }
+tower-http = { version = "0.6", default-features = false, features = ["trace", "cors"] }
+vercel_runtime = "1.1"   # 2.x has Service-based API break; migrate as part of Phase 1 when handlers are rewritten
+subtle = "2"
+sha2 = "0.10"
+
+# Workspace member crates
+eth-tools-core      = { path = "crates/core" }
+eth-tools-api       = { path = "crates/api" }
+eth-tools-mcp       = { path = "crates/mcp" }
+eth-tools-workers   = { path = "crates/workers" }
+eth-tools-payments  = { path = "crates/payments" }
+eth-tools-db        = { path = "crates/db" }
+eth-tools-rpc       = { path = "crates/rpc" }
+
+# ---- Root package (Vercel function entrypoints) ----
+[dependencies]
+anyhow.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+http.workspace = true
+vercel_runtime.workspace = true
+
+eth-tools-api.workspace = true
+eth-tools-mcp.workspace = true
+eth-tools-workers.workspace = true
+eth-tools-core.workspace = true
+
+[[bin]]
+name = "api_v1"
+path = "api/v1/index.rs"
+
+[[bin]]
+name = "api_mcp"
+path = "api/mcp/index.rs"
+
+[[bin]]
+name = "cron_registry_scraper"
+path = "api/cron/registry_scraper.rs"
+
+[[bin]]
+name = "cron_manifest_fetcher"
+path = "api/cron/manifest_fetcher.rs"
+
+[[bin]]
+name = "cron_endpoint_prober"
+path = "api/cron/endpoint_prober.rs"
+
+[[bin]]
+name = "cron_reputation_aggregator"
+path = "api/cron/reputation_aggregator.rs"
+
+[[bin]]
+name = "cron_validation_aggregator"
+path = "api/cron/validation_aggregator.rs"
+
+[[bin]]
+name = "cron_wallet_rotation_watcher"
+path = "api/cron/wallet_rotation_watcher.rs"
+
+[[bin]]
+name = "cron_trust_score_recompute"
+path = "api/cron/trust_score_recompute.rs"
+
+[[bin]]
+name = "cron_wallet_balance_keeper"
+path = "api/cron/wallet_balance_keeper.rs"
+
+# ---- Release profile (cold-start budget per plan §13.3) ----
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+opt-level = 3

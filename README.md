@@ -10,7 +10,7 @@ Three machine surfaces (HTTP API · MCP server · CLI) and a human dashboard, al
 
 Pre-alpha. Bootstrapping infrastructure. See [the plan](https://github.com/jadenfix/eth-tools/blob/main/AGENTS.md) for the roadmap.
 
-## Quickstart (once shipped)
+## Quickstart (once shipped — pre-alpha today)
 
 ```bash
 # Read
@@ -22,6 +22,8 @@ npx eth-tools find "wallet risk"
 # MCP (Claude / Cursor)
 npx eth-tools mcp install
 ```
+
+> The endpoints above 404 today. Pre-alpha. See [AGENTS.md](AGENTS.md) for the local-dev quickstart.
 
 ## License
 

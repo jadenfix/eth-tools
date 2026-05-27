@@ -1,0 +1,12 @@
+avoid-breaking-exported-api = false
+msrv = "1.82.0"
+
+# Plan §10.5 #1: prevent careless Debug-printing of secrets. The actual deny
+# lints live as `#![deny(clippy::print_stdout, clippy::dbg_macro,
+# clippy::print_stderr)]` at the top of `crates/payments/src/lib.rs`. We do not
+# rely on a custom `disallowed_methods` list here because (a) the secret-bearing
+# call is `std::env::var("EVM_PRIVATE_KEY")` and that exact call is forbidden
+# outside `crates/payments::wallet::sign_and_send` by CODEOWNERS review, not by
+# clippy; and (b) `clippy::disallowed_methods` cannot express "this method, when
+# its argument is this literal" — the lint would have to ban `std::env::var`
+# wholesale, which is impractical.

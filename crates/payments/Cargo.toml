@@ -1,0 +1,14 @@
+[package]
+name = "eth-tools-payments"
+description = "x402 receive + env-var wallet with hard rails (plan §10)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+eth-tools-core.workspace = true
