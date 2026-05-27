@@ -31,8 +31,11 @@ pub const CHAINS: &[Chain] = &[
         reputation_registry: REPUTATION_REGISTRY,
         validation_registry: VALIDATION_REGISTRY,
         is_testnet: false,
-        // Placeholder — replace with the actual Base deploy block before backfill.
-        genesis_block: 25_000_000,
+        // Actual Base mainnet deploy block of IdentityRegistry per BaseScan
+        // (contract creator tx of 0x8004A169…). Same block also holds the
+        // Reputation/Validation registries — all three CREATE2-deployed in
+        // a single tx.
+        genesis_block: 41_663_783,
     },
     Chain {
         chain_id: 84532,
@@ -41,7 +44,10 @@ pub const CHAINS: &[Chain] = &[
         reputation_registry: REPUTATION_REGISTRY,
         validation_registry: VALIDATION_REGISTRY,
         is_testnet: true,
-        genesis_block: 18_000_000,
+        // TODO(phase-4): verify Base Sepolia deploy block via Etherscan v2
+        // API once we have a key. 21_000_000 is a conservative pre-deploy
+        // floor that keeps the scraper from sweeping years of empty blocks.
+        genesis_block: 21_000_000,
     },
 ];
 
