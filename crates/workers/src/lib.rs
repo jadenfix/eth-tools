@@ -22,6 +22,8 @@ use serde::Serialize;
 
 pub mod context;
 pub mod cron;
+pub mod reputation_aggregator;
+pub mod reputation_summary;
 mod rpc_http;
 
 pub use context::{deps, WorkerContext, WorkerDeps};
