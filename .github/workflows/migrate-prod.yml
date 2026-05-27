@@ -7,6 +7,11 @@ on:
       - 'crates/db/migrations/**'
   workflow_dispatch:
 
+# Principle of least privilege. Migration secrets come from the `production`
+# environment scope; the workflow itself only needs to read the repo.
+permissions:
+  contents: read
+
 jobs:
   migrate:
     name: sqlx migrate run

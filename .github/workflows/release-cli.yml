@@ -7,6 +7,11 @@ on:
 
 # Bootstrap scaffold — Biome-style cross-platform binary release + npm
 # meta-package. See plan §16. Fully wired in Phase 7.
+#
+# Default to read-only; the publish job overrides with the minimum write
+# permissions it actually needs once Phase 7 lands.
+permissions:
+  contents: read
 
 jobs:
   build:

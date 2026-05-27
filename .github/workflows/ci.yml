@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Principle of least privilege: every job needs only read access to the repo.
+# Override per-job (never per-workflow) if a job needs writes.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -54,17 +59,20 @@ jobs:
         with:
           shared-key: workspace
       - name: Install cargo-audit
+        # `|| true` here is intentional: install fails on cache-hit since the
+        # binary is already present. The audit step below is NOT swallowed.
         run: cargo install --locked cargo-audit || true
-      - name: cargo audit
-        run: cargo audit --deny warnings || true   # advisory-only until first real PR
+      - name: cargo audit (fail on any advisory)
+        run: cargo audit --deny warnings
       - uses: pnpm/action-setup@v4
         # version pinned via `packageManager` field in package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile || pnpm install
-      - run: pnpm audit --prod --audit-level=high || true   # advisory-only
+      - run: pnpm install --frozen-lockfile
+      - name: pnpm audit (fail on high+)
+        run: pnpm audit --prod --audit-level=high
 
   typescript:
     name: typescript (typecheck · lint · gen-check)

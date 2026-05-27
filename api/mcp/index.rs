@@ -1,8 +1,8 @@
-//! Vercel function entrypoint — catch-all for /api/v1/*
+//! Vercel function entrypoint for /api/mcp/* — MCP server.
 //!
-//! Hands the request to the Axum router defined in `eth-tools-api`.
-//! Per plan §11.1: one binary serves every REST route to keep build time and
-//! cold-start budget bounded.
+//! **PR #1 scope: bootstrap stub.** Real rmcp + Axum integration lands in
+//! Phase 5 alongside the `vercel_runtime` 2.x migration. Vercel routes
+//! `/api/mcp/*` here via `vercel.json` rewrites.
 
 use vercel_runtime::{run, Body, Error, Request, Response, StatusCode};
 
@@ -17,15 +17,12 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn handler(req: Request) -> Result<Response<Body>, Error> {
-    // Bootstrap stub: real Axum integration lands in the next PR.
-    // We log and return a JSON envelope describing the request the function received.
-    tracing::info!(method = %req.method(), uri = %req.uri(), "api_v1 request");
+    tracing::info!(method = %req.method(), uri = %req.uri(), "api_mcp request");
     let body = serde_json::json!({
         "service": "eth-tools",
-        "function": "api_v1",
+        "function": "api_mcp",
         "status": "bootstrap",
-        "method": req.method().as_str(),
-        "uri": req.uri().to_string(),
+        "tools_planned": eth_tools_mcp::TOOL_NAMES,
     });
     Ok(Response::builder()
         .status(StatusCode::OK)

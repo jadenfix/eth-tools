@@ -32,7 +32,9 @@ clap = { version = "4", features = ["derive", "env"] }
 axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio"] }
 tower = { version = "0.5", default-features = false, features = ["util"] }
 tower-http = { version = "0.6", default-features = false, features = ["trace", "cors"] }
-vercel_runtime = "1.1"
+vercel_runtime = "1.1"   # 2.x has Service-based API break; migrate as part of Phase 1 when handlers are rewritten
+subtle = "2"
+sha2 = "0.10"
 
 # Workspace member crates
 eth-tools-core      = { path = "crates/core" }
@@ -61,11 +63,11 @@ eth-tools-core.workspace = true
 
 [[bin]]
 name = "api_v1"
-path = "api/v1/[...path].rs"
+path = "api/v1/index.rs"
 
 [[bin]]
 name = "api_mcp"
-path = "api/mcp/[...path].rs"
+path = "api/mcp/index.rs"
 
 [[bin]]
 name = "cron_registry_scraper"

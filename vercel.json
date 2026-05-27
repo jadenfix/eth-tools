@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "functions": {
-    "api/v1/[...path].rs":                   { "maxDuration": 30 },
-    "api/mcp/[...path].rs":                  { "maxDuration": 60 },
+    "api/v1/index.rs":                       { "maxDuration": 30 },
+    "api/mcp/index.rs":                      { "maxDuration": 60 },
     "api/cron/registry_scraper.rs":          { "maxDuration": 120 },
     "api/cron/manifest_fetcher.rs":          { "maxDuration": 300 },
     "api/cron/endpoint_prober.rs":           { "maxDuration": 300 },
@@ -13,6 +13,10 @@
     "api/cron/trust_score_recompute.rs":     { "maxDuration": 300 },
     "api/cron/wallet_balance_keeper.rs":     { "maxDuration": 120 }
   },
+  "rewrites": [
+    { "source": "/api/v1/(.*)",  "destination": "/api/v1/index" },
+    { "source": "/api/mcp/(.*)", "destination": "/api/mcp/index" }
+  ],
   "crons": [
     { "path": "/api/cron/wallet_rotation_watcher",  "schedule": "*/1 * * * *" },
     { "path": "/api/cron/registry_scraper",         "schedule": "*/2 * * * *" },
