@@ -3,8 +3,13 @@
 pub mod chains;
 pub mod denied_reason;
 pub mod errors;
+pub mod events;
 pub mod manifest;
 
 pub use chains::{Chain, CHAINS};
 pub use denied_reason::DeniedReason;
 pub use errors::Error;
+pub use events::{
+    MetadataSet, Registered, Transfer, URIUpdated, METADATA_SET_TOPIC, REGISTERED_TOPIC, TRANSFER_TOPIC,
+    URI_UPDATED_TOPIC,
+};
