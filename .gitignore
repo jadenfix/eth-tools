@@ -40,8 +40,13 @@ id_ed25519*
 secrets.*
 .envrc
 
-# Agent caches
-.claude/
+# Agent caches — local-only state lives in subdirs we name explicitly so the
+# committed slash-command + rules directories ride along.
+.claude/cache/
+.claude/logs/
+.claude/sessions/
+.claude/local/
+.claude/state/
 .cursor/cache/
 
 # Test artifacts

@@ -10,6 +10,12 @@ Eight autonomous Rust worker agents keep the data plane fresh.
 
 The master plan lives at `/Users/jadenfix/.claude/plans/let-s-do-8004-buzzing-bear.md` on the maintainer's machine. The repo follows that plan section-by-section; every PR cites a `§` reference.
 
+## The hot path
+
+- **Rust workspace** at `crates/*` — all application logic lives here. Most changes touch `crates/api` (HTTP handlers), `crates/mcp` (MCP tools), `crates/workers` (background jobs), `crates/db` (queries + migrations), or `crates/payments` (wallet).
+- **Dashboard** at `app/` — Next.js 15 app router, Tailwind v4, Auth.js. The landing page is `app/page.tsx` with client islands in `app/_landing/*`.
+- **Cron entrypoints** at `api/cron/*.rs` — thin Vercel function wrappers that call into `crates/workers`. New crons need both a file here AND a schedule entry in `vercel.json`.
+
 ## Repo map
 
 | Path | Owner |
@@ -57,6 +63,30 @@ bash scripts/bootstrap.sh
 
 If you change anything in `crates/payments/` or `api/cron/wallet_*.rs`, ping `@jadenfix` (CODEOWNERS will enforce).
 
+## How to add a new HTTP endpoint
+
+1. Write the handler in `crates/api/src/handlers/<name>.rs` with a `utoipa` doc-attr.
+2. Mount it in `crates/api/src/lib.rs` under the `Router` builder.
+3. Register the schema in `crates/openapi-gen/src/main.rs` so it lands in `app/openapi.json`.
+4. `pnpm gen:types` regenerates `app/lib/api-types.ts`.
+5. Add a handler test under `crates/api/tests/` covering the happy path + one `DeniedReason`.
+
+## How to add a new MCP tool
+
+1. Drop a file in `crates/mcp/src/tools/<name>.rs` implementing `Tool` from `rmcp`.
+2. Register it in `crates/mcp/src/lib.rs` `register_tools()`.
+3. Read-only tools call into `crates/api` helpers; write tools must go through `crates/payments::wallet::sign_and_send` — never bypass.
+4. Add an integration test under `crates/mcp/tests/` that drives the tool through the MCP transport.
+5. Document the tool surface in `app/llms.txt/route.ts`.
+
+## How to run tests
+
+```bash
+cargo test --workspace          # Rust unit + integration
+pnpm typecheck                  # TypeScript
+pnpm test                       # Dashboard smoke tests (when wired)
+```
+
 ## How to ship a change
 
 1. Branch off `main`: `git checkout -b feat/<scope>-<verb>`.
@@ -71,3 +101,5 @@ If you change anything in `crates/payments/` or `api/cron/wallet_*.rs`, ping `@j
 - Don't pull in heavy deps (full-feature `tokio`, OpenSSL, etc.) — see cold-start budget.
 - Don't introduce Cloudflare, Sentry, Axiom, Datadog, or any third-party observability — Vercel built-in + Postgres audit only at MVP.
 - Don't bypass the wallet rails. Every signed transaction goes through `crates/payments::wallet::sign_and_send`.
+- Don't log secrets. `EVM_PRIVATE_KEY`, API keys, OAuth tokens — none of these belong in `tracing` events, even at `trace!` level.
+- Don't add new top-level npm or `[workspace.dependencies]` entries without discussion. We're optimising for cold-start size and supply-chain surface; raise it in an issue first.

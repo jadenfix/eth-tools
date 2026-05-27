@@ -1,8 +1,42 @@
 [
   {
     "chain": "base",
-    "agent_id": "1",
-    "label": "Genesis agent — placeholder for landing page carousel",
-    "notes": "Replaced with curated entries during Phase 8."
+    "agentId": "1",
+    "label": "TODO: replace with real entries before launch",
+    "description": "Placeholder featured agent. Curated entries land before public launch.",
+    "manifestUrl": "https://example.com/.well-known/agent-card.json",
+    "websiteUrl": "https://example.com"
+  },
+  {
+    "chain": "base",
+    "agentId": "2",
+    "label": "TODO: replace with real entries before launch",
+    "description": "Placeholder featured agent. Curated entries land before public launch.",
+    "manifestUrl": "https://example.com/.well-known/agent-card.json",
+    "websiteUrl": "https://example.com"
+  },
+  {
+    "chain": "base-sepolia",
+    "agentId": "3",
+    "label": "TODO: replace with real entries before launch",
+    "description": "Placeholder featured agent. Curated entries land before public launch.",
+    "manifestUrl": "https://example.com/.well-known/agent-card.json",
+    "websiteUrl": "https://example.com"
+  },
+  {
+    "chain": "base",
+    "agentId": "4",
+    "label": "TODO: replace with real entries before launch",
+    "description": "Placeholder featured agent. Curated entries land before public launch.",
+    "manifestUrl": "https://example.com/.well-known/agent-card.json",
+    "websiteUrl": "https://example.com"
+  },
+  {
+    "chain": "base",
+    "agentId": "5",
+    "label": "TODO: replace with real entries before launch",
+    "description": "Placeholder featured agent. Curated entries land before public launch.",
+    "manifestUrl": "https://example.com/.well-known/agent-card.json",
+    "websiteUrl": "https://example.com"
   }
 ]
