@@ -16,7 +16,7 @@ else
 fi
 
 echo "==> Installing node deps"
-pnpm install --frozen-lockfile || pnpm install
+pnpm install --frozen-lockfile
 
 echo "==> Installing sqlx-cli (if missing)"
 if ! command -v sqlx >/dev/null 2>&1; then
@@ -41,10 +41,10 @@ fi
 
 echo "==> Running migrations"
 DATABASE_URL="postgres://dev:dev@localhost:5432/eth_tools?sslmode=disable" \
-  sqlx migrate run --source crates/db/migrations || true
+  sqlx migrate run --source crates/db/migrations
 
 echo "==> Generating OpenAPI + TypeScript types"
-pnpm gen:types || true
+pnpm gen:types
 
 cat <<EOF
 

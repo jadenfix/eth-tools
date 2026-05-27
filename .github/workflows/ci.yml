@@ -91,7 +91,7 @@ jobs:
           shared-key: workspace
 
       - name: Install deps
-        run: pnpm install --frozen-lockfile || pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: pnpm typecheck
         run: pnpm typecheck

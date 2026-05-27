@@ -24,9 +24,9 @@ The master plan lives at `/Users/jadenfix/.claude/plans/let-s-do-8004-buzzing-be
 | `crates/cli` | `eth-tools` binary |
 | `crates/dev-server` | Local-only Axum binary mounting prod handlers on :3000 |
 | `crates/openapi-gen` | Build-time tool; emits `app/openapi.json` |
-| `api/v1/[...path].rs` | Catch-all REST function (Vercel) |
-| `api/mcp/[...path].rs` | MCP server function (Vercel) |
-| `api/cron/*.rs` | 8 cron worker functions |
+| `api/v1/index.rs` | Catch-all REST function (Vercel; `vercel.json` rewrites `/api/v1/*` → here) |
+| `api/mcp/index.rs` | MCP server function (Vercel; `vercel.json` rewrites `/api/mcp/*` → here) |
+| `api/cron/*.rs` | 8 cron worker functions (paths are static — Vercel cron requires it) |
 | `app/` | Next.js 15 dashboard + Auth.js + .well-known + landing |
 
 ## Bootstrap

@@ -56,11 +56,11 @@ where
         } else {
             "INVALID_CRON_SECRET"
         };
-        let body = serde_json::json!({
-            "error": code,
-            "worker": worker_name,
-            "vercel_env": env,
-        });
+        // Server-side tracing keeps the env + worker for ops; the wire response
+        // is intentionally minimal — unauthenticated callers don't need to learn
+        // `VERCEL_ENV` or the precise worker name.
+        tracing::warn!(worker = worker_name, vercel_env = %env, code, "cron auth failed");
+        let body = serde_json::json!({ "error": code });
         let status = if code == "CRON_SECRET_MISCONFIGURED" {
             StatusCode::INTERNAL_SERVER_ERROR
         } else {

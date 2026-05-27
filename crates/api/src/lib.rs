@@ -1,7 +1,8 @@
 //! HTTP API router for eth-tools.
 //!
-//! Mounted by `api/v1/[...path].rs` (the Vercel function entrypoint) and by
-//! `crates/dev-server` (local development).
+//! Mounted by `api/v1/index.rs` (the Vercel function entrypoint; `vercel.json`
+//! rewrites `/api/v1/(.*)` → `/api/v1/index`) and by `crates/dev-server` for
+//! local development.
 
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use serde_json::{json, Value};

@@ -4,6 +4,13 @@
 //! config or env would let a single compromised env var widen the blast radius.
 //! Changing them requires a code review + signed commit.
 
+// Plan §10.5 #1: any accidental `println!`/`dbg!`/`eprintln!` inside the wallet
+// crate is a hard build error. The signed-tx path runs in production with the
+// `EVM_PRIVATE_KEY` env var loaded; the only place a secret can leak to stdout
+// is a careless debug print. Hoist these to deny so a future contributor cannot
+// land one. The corresponding clippy guidance lives in `clippy.toml`.
+#![deny(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)]
+
 pub mod wallet {
     /// Base mainnet only at MVP. Plan §10.5 control #3.
     pub const ALLOWED_CHAIN_ID: u64 = 8453;
