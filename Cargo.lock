@@ -1343,9 +1343,16 @@ version = "0.0.1"
 dependencies = [
  "alloy",
  "alloy-primitives",
+ "async-trait",
+ "axum",
+ "http",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -1416,7 +1423,6 @@ dependencies = [
  "eth-tools-db",
  "http",
  "jsonschema",
- "reqwest",
  "rmcp",
  "schemars 1.2.1",
  "serde",
@@ -1429,7 +1435,6 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
- "url",
 ]
 
 [[package]]

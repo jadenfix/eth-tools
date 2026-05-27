@@ -12,3 +12,17 @@ serde_json.workspace = true
 thiserror.workspace = true
 alloy.workspace = true
 alloy-primitives.workspace = true
+
+# safe_fetch — SSRF-guarded HTTP fetcher shared by crates/mcp + crates/workers
+# (and any future caller that pulls attacker-controlled URLs). Reqwest with
+# rustls only, plus async-trait so the DNS resolver can be a trait object.
+reqwest.workspace = true
+url.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["sync", "net"] }
+http.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "sync", "net"] }
+axum = { workspace = true }

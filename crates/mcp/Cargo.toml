@@ -30,13 +30,12 @@ rmcp.workspace = true
 schemars = { workspace = true, features = ["chrono04"] }
 
 # Manifest tools (`hash_manifest`, `validate_manifest`) — sha2 for the
-# content hash, jsonschema for the ERC-8004 manifest schema, reqwest for
-# `uri:` fetch (rustls only — Vercel doesn't bundle openssl).
+# content hash, jsonschema for the ERC-8004 manifest schema, base64 for
+# the `bytes:` input arm. SSRF-safe URI fetching is delegated to
+# `eth_tools_core::safe_fetch` so reqwest/url live there only.
 sha2.workspace = true
 jsonschema.workspace = true
-reqwest.workspace = true
 base64.workspace = true
-url.workspace = true
 
 # Shared model + DB layer — tools call these directly rather than re-entering
 # the HTTP router.
