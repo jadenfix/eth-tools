@@ -368,6 +368,7 @@ name = "eth-tools-fns"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "axum",
  "eth-tools-api",
  "eth-tools-core",
  "eth-tools-mcp",
@@ -376,6 +377,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "vercel_runtime",
