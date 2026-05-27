@@ -16,6 +16,9 @@ subtle.workspace = true
 sha2.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 alloy.workspace = true
+sqlx.workspace = true
+bigdecimal.workspace = true
+chrono.workspace = true
 eth-tools-core.workspace = true
 eth-tools-rpc.workspace = true
 eth-tools-db.workspace = true

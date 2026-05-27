@@ -1471,6 +1471,7 @@ version = "0.0.1"
 dependencies = [
  "alloy",
  "async-trait",
+ "bigdecimal",
  "chrono",
  "eth-tools-core",
  "eth-tools-db",
