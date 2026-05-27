@@ -54,6 +54,8 @@ serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 http.workspace = true
+axum.workspace = true
+tower.workspace = true
 vercel_runtime.workspace = true
 
 eth-tools-api.workspace = true
