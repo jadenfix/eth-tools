@@ -15,16 +15,21 @@
     "format": "prettier --write \"app/**/*.{ts,tsx,js,jsx,json,md}\"",
     "gen:openapi": "cargo run --quiet -p eth-tools-openapi-gen > app/openapi.json",
     "gen:types": "bash scripts/gen-types.sh",
-    "gen:check": "bash scripts/gen-types.sh && git diff --exit-code app/openapi.json app/lib/api-types.ts"
+    "gen:check": "bash scripts/gen-types.sh && git diff --exit-code app/openapi.json app/lib/api-types.ts",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "clsx": "2.1.1",
     "next": "15.5.18",
     "next-auth": "5.0.0-beta.25",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "react-markdown": "^10.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "22.10.1",
     "@types/react": "19.0.1",

@@ -35,8 +35,28 @@ export default async function DashboardHome() {
               </Link>
             </li>
             <li>
+              <Link href="/dashboard/wallet" className="underline underline-offset-2">
+                Wallet — balance, spend, denials
+              </Link>
+            </li>
+            <li>
+              <Link href="/dashboard/workers" className="underline underline-offset-2">
+                Workers — SLO + cursor lag
+              </Link>
+            </li>
+            <li>
+              <Link href="/dashboard/alerts" className="underline underline-offset-2">
+                Alerts — triage queue
+              </Link>
+            </li>
+            <li>
               <Link href="/dashboard/keys" className="underline underline-offset-2">
                 API keys (coming soon)
+              </Link>
+            </li>
+            <li>
+              <Link href="/docs" className="underline underline-offset-2">
+                Docs
               </Link>
             </li>
           </ul>
