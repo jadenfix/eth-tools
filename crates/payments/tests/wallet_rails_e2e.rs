@@ -250,3 +250,71 @@ async fn request_path_is_recorded_verbatim() {
     .unwrap();
     assert_eq!(path, "/api/v1/wallet/spend");
 }
+
+#[tokio::test]
+async fn api_key_id_is_threaded_into_denial_row() {
+    // Phase 6.2 will set `api_key_id` on PolicyContext from the HTTP
+    // request's auth layer; the denials audit row must carry it so we
+    // can attribute denials back to the calling key. The plumbing exists
+    // today (it's `None` until the HTTP layer wires it in 6.2) — this test
+    // pins the field is honored end-to-end through `sign_and_send`.
+    let Some((_c, pool)) = boot().await else {
+        return;
+    };
+    let (edge, counter, balance) = happy_stubs();
+    // Pre-insert an api_keys row so the FK constraint is satisfied. The
+    // schema requires github_user_id / github_login / key_prefix(UNIQUE) /
+    // key_hash / name — values are arbitrary, just non-null + unique.
+    let api_key_id = uuid::Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO api_keys (id, github_user_id, github_login, key_prefix, key_hash, name) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(api_key_id)
+    .bind(1_i64)
+    .bind("phase6-test")
+    .bind(format!("pfx-{api_key_id}"))
+    .bind(format!("hash-{api_key_id}"))
+    .bind("phase-6-attribution-test")
+    .execute(&pool)
+    .await
+    .expect("seed api_keys row");
+
+    let ctx = PolicyContext::new("production", &edge, &counter, &balance)
+        .with_api_key_id(Some(api_key_id));
+    let bad = TransactionRequest::new(1, ALLOWED_RECIPIENTS[0], 100_000);
+    sign_and_send(bad, &ctx, &pool, "/api/v1/wallet/spend")
+        .await
+        .unwrap_err();
+
+    let (stored,): (Option<uuid::Uuid>,) = sqlx::query_as(
+        "SELECT api_key_id FROM denials WHERE code = 'WRONG_CHAIN' ORDER BY id DESC LIMIT 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored, Some(api_key_id));
+}
+
+#[tokio::test]
+async fn kill_switch_off_fires_before_chain_rail_e2e() {
+    // Issue 1 fix: with kill_switch OFF AND a malformed tx (wrong chain),
+    // the denial row MUST be KILL_SWITCH_ACTIVE — not WRONG_CHAIN. This
+    // is the dashboard-signal invariant the rail reorder enforces.
+    let Some((_c, pool)) = boot().await else {
+        return;
+    };
+    let edge = InMemoryEdgeConfig::with_bool(KILL_SWITCH_KEY, false);
+    let counter = InMemorySpendCounter::new();
+    let balance = InMemoryBalanceProvider::new(100);
+    let ctx = PolicyContext::new("production", &edge, &counter, &balance);
+    let bad = TransactionRequest::new(1, ALLOWED_RECIPIENTS[0], 100_000);
+    let err = sign_and_send(bad, &ctx, &pool, "test:kill_masks_chain")
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, "KILL_SWITCH_ACTIVE");
+    let n = count_by_code_evaluator(&pool, "KILL_SWITCH_ACTIVE", "wallet.kill")
+        .await
+        .unwrap();
+    assert!(n >= 1, "expected at least one KILL_SWITCH_ACTIVE row");
+}

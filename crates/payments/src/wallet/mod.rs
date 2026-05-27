@@ -32,7 +32,8 @@ pub mod policy;
 pub mod sign;
 
 pub use policy::{
-    evaluate_all, Approved, PolicyContext, Rail, TransactionRequest, ESTIMATED_TX_COST_USD_CENTS,
+    evaluate_all, reconcile_actual_cost, Approved, PolicyContext, Rail, TransactionRequest,
+    ESTIMATED_TX_COST_USD_CENTS,
 };
 pub use sign::sign_and_send;
 

@@ -63,6 +63,11 @@ struct InnerState {
     /// If set, every call returns `Err(Transport(msg))` instead of touching
     /// state. Used to drive fail-closed tests.
     fail_with: Option<String>,
+    /// Per-op failure switches — narrower than `fail_with` so tests can
+    /// drive "incrby succeeds, expire fails" scenarios that exercise the
+    /// counter-rollback path on EXPIRE failure.
+    fail_expire_with: Option<String>,
+    fail_decrby_with: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,6 +96,18 @@ impl InMemorySpendCounter {
 
     pub fn fail_all_with(&self, msg: impl Into<String>) {
         self.state.write().expect("counter lock poisoned").fail_with = Some(msg.into());
+    }
+
+    /// Fail only `expire` calls — lets a test simulate the "incrby succeeded
+    /// but EXPIRE failed" race the daily-cap rail rolls back on.
+    pub fn fail_expire_with(&self, msg: impl Into<String>) {
+        self.state.write().expect("counter lock poisoned").fail_expire_with = Some(msg.into());
+    }
+
+    /// Fail only `decrby` calls — lets a test simulate the worst case where
+    /// the rollback `DECRBY` ALSO fails (counter inflated until TTL).
+    pub fn fail_decrby_with(&self, msg: impl Into<String>) {
+        self.state.write().expect("counter lock poisoned").fail_decrby_with = Some(msg.into());
     }
 
     pub fn value(&self, key: &str) -> i64 {
@@ -137,6 +154,9 @@ impl SpendCounter for InMemorySpendCounter {
         if let Some(msg) = guard.fail_with.clone() {
             return Err(SpendCounterError::Transport(msg));
         }
+        if let Some(msg) = guard.fail_decrby_with.clone() {
+            return Err(SpendCounterError::Transport(msg));
+        }
         let entry = guard.counters.entry(key.to_string()).or_insert(0);
         *entry = entry.saturating_sub(amount);
         let after = *entry;
@@ -154,6 +174,9 @@ impl SpendCounter for InMemorySpendCounter {
             .write()
             .map_err(|e| SpendCounterError::Transport(format!("lock poisoned: {e}")))?;
         if let Some(msg) = guard.fail_with.clone() {
+            return Err(SpendCounterError::Transport(msg));
+        }
+        if let Some(msg) = guard.fail_expire_with.clone() {
             return Err(SpendCounterError::Transport(msg));
         }
         guard.ops.push(CounterOp::Expire {

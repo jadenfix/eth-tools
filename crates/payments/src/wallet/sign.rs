@@ -52,7 +52,7 @@ pub async fn sign_and_send(
                 DenialRecord {
                     code: reason.code.clone(),
                     evaluator: reason.evaluator.clone(),
-                    api_key_id: None,
+                    api_key_id: ctx.api_key_id,
                     request_path: request_path.to_string(),
                     details: Some(serde_json::to_value(&reason).unwrap_or(serde_json::Value::Null)),
                 },

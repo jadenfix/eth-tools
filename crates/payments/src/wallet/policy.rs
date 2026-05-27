@@ -15,16 +15,23 @@
 //!
 //! ## Rail order is load-bearing
 //!
-//! The cheapest rails (chain, gas, recipient — pure compares) run first.
-//! Network-hitting rails (kill switch, balance, daily cap) run after, so a
-//! malformed tx never burns an RPC call.
+//! **Kill switch runs FIRST** (after the env gate). The whole point of the
+//! kill switch is that flipping `wallet_enabled=false` during an incident is
+//! the loudest possible "stop" — every caller, including malformed ones, must
+//! see `KILL_SWITCH_ACTIVE` rather than some incidental rejection like
+//! `WRONG_CHAIN`. If a malformed-tx caller short-circuited on a cheaper rail
+//! the kill would be masked in dashboards and the `denials` audit ledger,
+//! making it impossible to tell from telemetry whether the kill is actually
+//! engaged. So we eat the one Edge-Config fetch to keep the signal clean.
 //!
-//! The daily-cap rail runs LAST, and is the only rail with side effects.
-//! That ordering means an early-rail rejection (e.g. wrong chain) cannot
-//! leave a stale counter increment behind, so the rollback contract is:
-//! *"increment, then if THIS rail rejects (cap exceeded), decrement
-//! immediately."* If a future rail or the signer fails AFTER the increment
-//! lands, the caller (`sign_and_send`) must invoke
+//! After the kill, the cheap pure rails (chain, recipient, gas) run in
+//! whatever order — they're all sync compares and order between them is not
+//! observable. Network-hitting rails (balance, daily cap) come last; the
+//! daily-cap rail is the only rail with side effects and **always runs
+//! last** so an early-rail rejection cannot leave a stale counter increment
+//! behind. The rollback contract is: *"increment, then if THIS rail rejects
+//! (cap exceeded), decrement immediately."* If a future rail or the signer
+//! fails AFTER the increment lands, the caller (`sign_and_send`) must invoke
 //! [`PolicyContext::rollback_daily_cap`].
 //!
 //! ## `result_large_err` carve-out
@@ -53,6 +60,7 @@ use alloy_primitives::{Address, U256};
 use eth_tools_core::DeniedReason;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use uuid::Uuid;
 
 /// Estimated per-tx cost in USD cents — plan §10.2 uses
 /// `estimate_cost_cents(&tx).await?`. Phase 6 ships a flat estimate so the
@@ -147,10 +155,17 @@ pub struct PolicyContext<'a> {
     /// Caller can override the default (`ESTIMATED_TX_COST_USD_CENTS`) once
     /// a real gas estimator lands in the signing PR.
     pub cost_cents: i64,
+    /// API-key UUID for attribution on the `denials` audit row. `None` for
+    /// CLI / sweep callers and the cold-start phase before the HTTP layer
+    /// wires it in (phase 6.2). The plumbing exists today so callers can
+    /// thread the value through without a follow-up signature change.
+    pub api_key_id: Option<Uuid>,
 }
 
 impl<'a> PolicyContext<'a> {
-    /// Builds a context with the default per-tx cost estimate.
+    /// Builds a context with the default per-tx cost estimate. `api_key_id`
+    /// starts as `None`; set it with [`Self::with_api_key_id`] when the
+    /// caller has one (HTTP layer in phase 6.2).
     pub fn new(
         vercel_env: &'a str,
         edge_config: &'a dyn EdgeConfig,
@@ -163,7 +178,15 @@ impl<'a> PolicyContext<'a> {
             spend_counter,
             balance_provider,
             cost_cents: ESTIMATED_TX_COST_USD_CENTS,
+            api_key_id: None,
         }
+    }
+
+    /// Builder method that attaches an API-key UUID for attribution on the
+    /// denials audit row. Returns `self` so it chains off `::new`.
+    pub fn with_api_key_id(mut self, api_key_id: Option<Uuid>) -> Self {
+        self.api_key_id = api_key_id;
+        self
     }
 
     /// Roll back a previously-committed daily-cap increment. The signing
@@ -328,10 +351,27 @@ pub async fn daily_cap(
     // Set/refresh TTL after each increment — cheap and means a brand-new
     // counter always carries the right expiry without a separate "first
     // write" branch.
-    counter
-        .expire(&key, DAILY_CAP_TTL_SECONDS)
-        .await
-        .map_err(spend_counter_to_denied)?;
+    //
+    // CRITICAL: if EXPIRE fails after INCRBY succeeded, the counter is left
+    // inflated by `cost_cents`. Worse, on a brand-new key with no prior TTL
+    // the inflation persists indefinitely. We must attempt a compensating
+    // DECRBY before propagating the error so the counter is restored to its
+    // pre-call value. If the DECRBY ALSO fails we log a `tracing::error!`
+    // so ops sees a counter-inflation incident (the only path that leaks
+    // counter state) — never silently leave the counter wrong.
+    if let Err(expire_err) = counter.expire(&key, DAILY_CAP_TTL_SECONDS).await {
+        if let Err(decrby_err) = counter.decrby(&key, cost_cents).await {
+            tracing::error!(
+                key = %key,
+                cost_cents,
+                expire_error = %expire_err,
+                decrby_error = %decrby_err,
+                "daily-cap counter inflated: INCRBY succeeded, EXPIRE failed, rollback DECRBY also failed — \
+                 counter will stay inflated by cost_cents until TTL or manual cleanup"
+            );
+        }
+        return Err(spend_counter_to_denied(expire_err));
+    }
 
     if after > i64::from(MAX_DAILY_SPEND_USD_CENTS) {
         // Roll back our own increment so the next caller sees the pre-call
@@ -359,6 +399,57 @@ fn spend_counter_to_denied(e: SpendCounterError) -> DeniedReason {
         .with_hint("spend counter unreachable — failing closed")
 }
 
+/// Reconcile the daily-spend counter against the **actual** cost of a tx
+/// once the signing path has a receipt. `daily_cap` charged the counter the
+/// estimated cost (`ESTIMATED_TX_COST_USD_CENTS`); this fn applies the delta
+/// so the running total reflects what the wallet really spent.
+///
+/// # Why this matters
+///
+/// `ESTIMATED_TX_COST_USD_CENTS = 5` is a flat constant. If actual gas
+/// settles at 12¢ and we never reconcile, the counter under-counts by 7¢
+/// per tx and the $1/day cap silently slips past — every leaked-key scenario
+/// the rails are supposed to bound gets that much worse.
+///
+/// # Phase 6.2 contract (REQUIRED)
+///
+/// **Phase 6.2 MUST call this after every successful tx**, with
+/// `actual_cents = receipt.gas_used * effective_gas_price` converted to
+/// USDC cents. Failing to do so silently breaks the daily cap.
+///
+/// `delta > 0` → `INCRBY (actual - estimated)`. `delta < 0` → `DECRBY` the
+/// absolute difference (estimator overshot). `delta == 0` → no-op.
+///
+/// Returns the post-reconcile counter value on success; on transport
+/// failure returns a `DAILY_CAP`-shaped `DeniedReason` so the signer can
+/// surface it without inventing a new error variant.
+pub async fn reconcile_actual_cost(
+    ctx: &PolicyContext<'_>,
+    estimated_cents: i64,
+    actual_cents: i64,
+) -> Result<i64, DeniedReason> {
+    let key = daily_spend_key(ctx.vercel_env);
+    let delta = actual_cents.saturating_sub(estimated_cents);
+    use std::cmp::Ordering;
+    match delta.cmp(&0) {
+        Ordering::Greater => ctx
+            .spend_counter
+            .incrby(&key, delta)
+            .await
+            .map_err(spend_counter_to_denied),
+        Ordering::Less => ctx
+            .spend_counter
+            .decrby(&key, -delta)
+            .await
+            .map_err(spend_counter_to_denied),
+        Ordering::Equal => ctx
+            .spend_counter
+            .incrby(&key, 0)
+            .await
+            .map_err(spend_counter_to_denied),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Top-level: evaluate all rails in fixed order.
 // ---------------------------------------------------------------------------
@@ -376,14 +467,18 @@ pub async fn evaluate_all(tx: TransactionRequest, ctx: &PolicyContext<'_>) -> Re
     // 0. Env gate (cheapest — sync, no I/O).
     env_gate(ctx.vercel_env)?;
 
-    // 1-4. Cheap rails (sync compares + one Edge-Config fetch).
-    //
-    // Order: chain/recipient/gas come first because they're sync; if the tx
-    // is obviously malformed we never reach for the network at all.
+    // 1. Kill switch — FIRST after the env gate. During an incident, flipping
+    //    `wallet_enabled=false` must be the signal every caller sees in the
+    //    denials ledger and dashboards — even malformed callers. Eating one
+    //    Edge-Config fetch here keeps the KILL_SWITCH_ACTIVE signal clean
+    //    rather than letting WRONG_CHAIN / GAS_TOO_HIGH mask it.
+    kill_switch(ctx.edge_config).await?;
+
+    // 2-4. Cheap sync rails (pure compares). Order between them is not
+    //      observable — any malformed-tx ordering is equally valid.
     allowed_chain(&tx)?;
     allowed_recipient(&tx)?;
     gas_ceiling(&tx)?;
-    kill_switch(ctx.edge_config).await?;
 
     // 5. Balance — single RPC call.
     balance_ceiling(ctx.balance_provider).await?;
@@ -691,5 +786,200 @@ mod tests {
         let approved = evaluate_all(ok_tx(), &ctx).await.unwrap();
         assert_eq!(approved.committed_cents, 0);
         assert_eq!(approved.daily_spend_after_cents, 0);
+    }
+
+    // -- Issue 1: kill_switch is rail #1 ----------------------------------
+
+    #[tokio::test]
+    async fn evaluate_all_kill_switch_fires_before_chain_rail() {
+        // A malformed tx (wrong chain) with kill switch OFF must surface
+        // KILL_SWITCH_ACTIVE, NOT WRONG_CHAIN — flipping the kill is the
+        // signal ops dashboards key off, so it can't be masked by an
+        // incidental rejection on a cheaper sync rail.
+        let edge = InMemoryEdgeConfig::with_bool(KILL_SWITCH_KEY, false);
+        let counter = InMemorySpendCounter::new();
+        let balance = InMemoryBalanceProvider::new(100);
+        let ctx = good_ctx(&edge, &counter, &balance);
+        let bad = TransactionRequest::new(1, ALLOWED_RECIPIENTS[0], 100_000);
+        let err = evaluate_all(bad, &ctx).await.unwrap_err();
+        assert_eq!(err.code, Rail::KillSwitch.code());
+        // No counter ops — kill fires before the cap rail.
+        assert!(counter.ops().is_empty());
+    }
+
+    #[tokio::test]
+    async fn evaluate_all_kill_switch_fires_before_gas_rail() {
+        let edge = InMemoryEdgeConfig::with_bool(KILL_SWITCH_KEY, false);
+        let counter = InMemorySpendCounter::new();
+        let balance = InMemoryBalanceProvider::new(100);
+        let ctx = good_ctx(&edge, &counter, &balance);
+        let bad = TransactionRequest::new(ALLOWED_CHAIN_ID, ALLOWED_RECIPIENTS[0], MAX_PER_TX_GAS + 1);
+        let err = evaluate_all(bad, &ctx).await.unwrap_err();
+        assert_eq!(err.code, Rail::KillSwitch.code());
+    }
+
+    // -- Issue 2: EXPIRE-failure rollback ---------------------------------
+
+    #[tokio::test]
+    async fn daily_cap_rolls_back_when_expire_fails() {
+        // INCRBY succeeds, EXPIRE fails — the rail MUST roll back via
+        // DECRBY so the counter ends up at its pre-call value.
+        let key = daily_spend_key("production");
+        let c = InMemorySpendCounter::with_initial(&key, 20);
+        c.fail_expire_with("simulated EXPIRE outage");
+        let err = daily_cap(&c, "production", 5).await.unwrap_err();
+        assert_eq!(err.code, Rail::DailyCap.code());
+        // Counter back at pre-call value — no inflation.
+        assert_eq!(c.value(&key), 20);
+        // And we observe the rollback in the op ledger.
+        let ops = c.ops();
+        assert!(matches!(ops.last(), Some(CounterOp::Decr { by: 5, .. })));
+    }
+
+    #[tokio::test]
+    async fn daily_cap_logs_when_expire_and_rollback_both_fail() {
+        // Worst-case path: INCRBY succeeds, EXPIRE fails, rollback DECRBY
+        // ALSO fails. The rail still returns Err (never silently approves),
+        // but the counter is left inflated. The `tracing::error!` is fired
+        // for ops to investigate — we assert the inflation here as proxy
+        // (capturing tracing events in unit tests adds a heavy dep).
+        let key = daily_spend_key("production");
+        let c = InMemorySpendCounter::with_initial(&key, 20);
+        c.fail_expire_with("simulated EXPIRE outage");
+        c.fail_decrby_with("simulated DECRBY outage");
+        let err = daily_cap(&c, "production", 5).await.unwrap_err();
+        assert_eq!(err.code, Rail::DailyCap.code());
+        // Counter stays inflated — the documented worst case.
+        assert_eq!(c.value(&key), 25);
+    }
+
+    // -- Issue 3: reconcile_actual_cost -----------------------------------
+
+    #[tokio::test]
+    async fn reconcile_actual_cost_increments_on_positive_delta() {
+        // Estimator undershot by 5¢ — counter must absorb the difference.
+        let edge = InMemoryEdgeConfig::with_bool(KILL_SWITCH_KEY, true);
+        let counter = InMemorySpendCounter::new();
+        let balance = InMemoryBalanceProvider::new(100);
+        let ctx = good_ctx(&edge, &counter, &balance);
+        let approved = evaluate_all(ok_tx(), &ctx).await.unwrap();
+        let key = daily_spend_key("production");
+        let pre = counter.value(&key);
+        let after = reconcile_actual_cost(&ctx, approved.committed_cents, approved.committed_cents + 5)
+            .await
+            .unwrap();
+        assert_eq!(after, pre + 5);
+        assert_eq!(counter.value(&key), pre + 5);
+    }
+
+    #[tokio::test]
+    async fn reconcile_actual_cost_decrements_on_negative_delta() {
+        // Estimator overshot by 3¢ — counter must give the credit back.
+        let edge = InMemoryEdgeConfig::with_bool(KILL_SWITCH_KEY, true);
+        let counter = InMemorySpendCounter::new();
+        let balance = InMemoryBalanceProvider::new(100);
+        let ctx = good_ctx(&edge, &counter, &balance);
+        let approved = evaluate_all(ok_tx(), &ctx).await.unwrap();
+        let key = daily_spend_key("production");
+        let pre = counter.value(&key);
+        let after = reconcile_actual_cost(&ctx, approved.committed_cents, approved.committed_cents - 3)
+            .await
+            .unwrap();
+        assert_eq!(after, pre - 3);
+        assert_eq!(counter.value(&key), pre - 3);
+    }
+
+    #[tokio::test]
+    async fn reconcile_actual_cost_zero_delta_is_noop() {
+        // Estimate matched actual — counter unchanged.
+        let edge = InMemoryEdgeConfig::with_bool(KILL_SWITCH_KEY, true);
+        let counter = InMemorySpendCounter::new();
+        let balance = InMemoryBalanceProvider::new(100);
+        let ctx = good_ctx(&edge, &counter, &balance);
+        let approved = evaluate_all(ok_tx(), &ctx).await.unwrap();
+        let key = daily_spend_key("production");
+        let pre = counter.value(&key);
+        let after = reconcile_actual_cost(&ctx, approved.committed_cents, approved.committed_cents)
+            .await
+            .unwrap();
+        assert_eq!(after, pre);
+        assert_eq!(counter.value(&key), pre);
+    }
+
+    // -- Issue 3b: api_key_id plumbing on PolicyContext -------------------
+
+    #[test]
+    fn policy_context_api_key_id_defaults_to_none() {
+        let edge = InMemoryEdgeConfig::with_bool(KILL_SWITCH_KEY, true);
+        let counter = InMemorySpendCounter::new();
+        let balance = InMemoryBalanceProvider::new(100);
+        let ctx = PolicyContext::new("production", &edge, &counter, &balance);
+        assert!(ctx.api_key_id.is_none());
+    }
+
+    #[test]
+    fn policy_context_with_api_key_id_threads_through() {
+        let id = Uuid::new_v4();
+        let edge = InMemoryEdgeConfig::with_bool(KILL_SWITCH_KEY, true);
+        let counter = InMemorySpendCounter::new();
+        let balance = InMemoryBalanceProvider::new(100);
+        let ctx =
+            PolicyContext::new("production", &edge, &counter, &balance).with_api_key_id(Some(id));
+        assert_eq!(ctx.api_key_id, Some(id));
+    }
+
+    // -- Issue 4: concurrent daily_cap stays within the cap ---------------
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn daily_cap_under_concurrent_load_never_exceeds_cap() {
+        // Spawn N=10 concurrent daily_cap evaluations against ONE shared
+        // counter. With cost=15¢ and cap=100¢ at most 6 approvals can fit
+        // (6 * 15 = 90); the remaining 4 must be denied AND must roll back.
+        // Invariants asserted post-storm:
+        //   1. Total counter value never exceeds the cap.
+        //   2. Counter == 15 * (approval_count).
+        //   3. approvals + denials == N.
+        use std::sync::Arc;
+
+        const N: usize = 10;
+        const COST: i64 = 15;
+        let counter = Arc::new(InMemorySpendCounter::new());
+        let key = daily_spend_key("production");
+
+        let mut handles = Vec::with_capacity(N);
+        for _ in 0..N {
+            let c = Arc::clone(&counter);
+            handles.push(tokio::spawn(async move {
+                daily_cap(c.as_ref(), "production", COST).await
+            }));
+        }
+
+        let mut approvals = 0usize;
+        let mut denials = 0usize;
+        for h in handles {
+            match h.await.unwrap() {
+                Ok(_) => approvals += 1,
+                Err(reason) => {
+                    assert_eq!(reason.code, Rail::DailyCap.code());
+                    denials += 1;
+                }
+            }
+        }
+
+        let final_value = counter.value(&key);
+        assert!(
+            final_value <= i64::from(MAX_DAILY_SPEND_USD_CENTS),
+            "concurrent load exceeded cap: {final_value} > {}",
+            MAX_DAILY_SPEND_USD_CENTS
+        );
+        assert_eq!(
+            final_value,
+            COST * approvals as i64,
+            "counter inconsistent: {final_value} vs {} approvals * {COST}¢",
+            approvals
+        );
+        assert_eq!(approvals + denials, N);
+        // With cost=15 and cap=100, at most 6 approvals fit.
+        assert!(approvals <= 6, "approvals {approvals} > 6 should fit");
     }
 }
