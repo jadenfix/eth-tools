@@ -1,2 +1,28 @@
-html, body { margin: 0; padding: 0; }
-*, *::before, *::after { box-sizing: border-box; }
+@import "tailwindcss";
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #0b0d10;
+    color: #e6e6e6;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  a {
+    color: #6ea8fe;
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+}
