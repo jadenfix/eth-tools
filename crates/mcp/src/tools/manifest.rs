@@ -195,9 +195,8 @@ async fn vet_host(
     // If *any* resolved address is denylisted, reject — a hostile DNS
     // can mix one public + one private address to bypass the check.
     for addr in &resolved {
-        guard(addr.ip()).map_err(|m| {
-            ToolError::InvalidInput(format!("uri host `{host}` -> {}: {m}", addr.ip()))
-        })?;
+        guard(addr.ip())
+            .map_err(|m| ToolError::InvalidInput(format!("uri host `{host}` -> {}: {m}", addr.ip())))?;
     }
     Ok(resolved)
 }
@@ -219,8 +218,7 @@ impl reqwest::dns::Resolve for StaticResolver {
         let key = name.as_str().to_string();
         let addrs = self.map.get(&key).cloned().unwrap_or_default();
         Box::pin(async move {
-            let iter: Box<dyn Iterator<Item = SocketAddr> + Send> =
-                Box::new(addrs.into_iter());
+            let iter: Box<dyn Iterator<Item = SocketAddr> + Send> = Box::new(addrs.into_iter());
             Ok::<_, BoxError>(iter)
         })
     }
@@ -291,8 +289,8 @@ async fn fetch_with_guard(
     guard: &SsrfGuard,
     require_json: bool,
 ) -> Result<Vec<u8>, ToolError> {
-    let mut current = url::Url::parse(uri)
-        .map_err(|e| ToolError::InvalidInput(format!("uri: parse: {e}")))?;
+    let mut current =
+        url::Url::parse(uri).map_err(|e| ToolError::InvalidInput(format!("uri: parse: {e}")))?;
     let mut hops = 0usize;
 
     loop {
@@ -718,9 +716,7 @@ mod tests {
     #[async_trait::async_trait]
     impl DnsResolver for ToctouResolver {
         async fn resolve(&self, _host: &str, _port: u16) -> Result<Vec<SocketAddr>, String> {
-            let n = self
-                .call_count
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let n = self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             if n == 0 {
                 Ok(vec![self.first])
             } else {
@@ -779,9 +775,7 @@ mod tests {
         // ours; reqwest's StaticResolver is a separate object that
         // looks up in the pre-populated map only.
         assert_eq!(
-            toctou
-                .call_count
-                .load(std::sync::atomic::Ordering::SeqCst),
+            toctou.call_count.load(std::sync::atomic::Ordering::SeqCst),
             1,
             "pre-vet must call the resolver exactly once"
         );

@@ -61,8 +61,12 @@ function baseUrl(): string {
   if (process.env.NODE_ENV !== 'production') {
     return process.env.INTERNAL_API_URL ?? 'http://127.0.0.1:3000';
   }
-  // In Vercel prod, same-host. Caller must pass a path starting with '/'.
-  return '';
+  // Server-side fetch in Node runtime rejects relative URLs (ERR_INVALID_URL).
+  // On Vercel, VERCEL_URL is the per-deployment hostname without scheme — use
+  // it (not VERCEL_PROJECT_PRODUCTION_URL) so preview SSR hits its own Rust
+  // functions instead of routing through prod.
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return process.env.INTERNAL_API_URL ?? 'http://127.0.0.1:3000';
 }
 
 /**
