@@ -1,18 +1,30 @@
 //! The 8 autonomous worker agents (plan §3). Each cron function under
-//! `api/cron/*.rs` is a thin wrapper that calls `cron::serve(name, req, body)`.
+//! `api/cron/*.rs` is a thin wrapper that calls one of:
+//!   - `cron::serve(name, req, |dryrun| …)` — legacy PR1 entrypoint, used
+//!     by the 8 stubs today.
+//!   - `cron::serve_with_context(name, req, |ctx| …)` — **M1 refactor
+//!     from PR2.** Closure receives a [`WorkerContext`] (pool, rpc,
+//!     vercel_env, dryrun, force). PR3 migrates the 8 stubs to this
+//!     entrypoint and deletes the legacy adapter.
 //!
-//! `cron::serve` enforces the per-worker invariants from plan §3:
-//!  - **Cron secret check** — fail-closed in production if `CRON_SECRET` is unset
-//!    (this is the security hole the deep review caught).
-//!  - **Env-aware skip** — non-production environments no-op (plan §11.5).
+//! Both enforce the per-worker invariants from plan §3:
+//!  - **Cron secret check** — fail-closed in production if `CRON_SECRET` is
+//!    unset.
+//!  - **Env-aware skip** — non-production environments no-op (plan §11.5),
+//!    unless `?force=1` (plan §3.2: backfill/replay opt-in).
 //!  - **Dry-run mode** via `?dryrun=1`.
-//!  - **Telemetry** — `WorkerSummary` is the wire shape for `worker_runs`.
+//!  - **Telemetry** — `serve_with_context` writes a `worker_runs` audit
+//!    row per non-dryrun invocation via `eth_tools_db::worker_runs`.
 //!
-//! Real worker bodies (scraping, fetching, probing) land in Phase 4.
+//! Real worker bodies (scraping, fetching, probing) land in PR3+.
 
 use serde::Serialize;
 
+pub mod context;
 pub mod cron;
+mod rpc_http;
+
+pub use context::{deps, WorkerContext, WorkerDeps};
 
 #[derive(Debug, Serialize)]
 pub struct WorkerSummary {

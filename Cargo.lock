@@ -1337,7 +1337,9 @@ dependencies = [
 name = "eth-tools-workers"
 version = "0.0.1"
 dependencies = [
+ "alloy",
  "async-trait",
+ "chrono",
  "eth-tools-core",
  "eth-tools-db",
  "eth-tools-rpc",
@@ -1345,7 +1347,10 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sqlx",
  "subtle",
+ "testcontainers",
+ "testcontainers-modules",
  "tokio",
  "tracing",
  "vercel_runtime",
