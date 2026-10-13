@@ -17,7 +17,7 @@ jobs:
           POSTGRES_DB: eth_tools_e2e
         ports: [5432:5432]
         options: >-
-          --health-cmd 'pg_isready -U postgres -d eth_tools_e2e'
+          --health-cmd "pg_isready -U postgres -d eth_tools_e2e"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgres://postgres:inert-e2e-only@127.0.0.1:5432/eth_tools_e2e
