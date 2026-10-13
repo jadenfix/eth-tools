@@ -26,16 +26,6 @@ pub const TOOL_NAMES: &[&str] = &[
     "health",
 ];
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn tool_count_matches_plan() {
-        // Plan §9.2 lists 20 tools + wallet_status + health.
-        assert_eq!(TOOL_NAMES.len(), 22);
-    }
-}
-
 /// Read-only JSON-RPC MCP surface backed by the same HTTP API as the CLI.
 /// Mutating/payment tools are deliberately not advertised until implemented.
 pub async fn handle(request: serde_json::Value, api_base: &str) -> serde_json::Value {
@@ -108,4 +98,14 @@ async fn read_api(base: &str, segments: &[&str]) -> Result<serde_json::Value, ()
         .json()
         .await
         .map_err(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn tool_count_matches_plan() {
+        // Plan §9.2 lists 20 tools + wallet_status + health.
+        assert_eq!(TOOL_NAMES.len(), 22);
+    }
 }
