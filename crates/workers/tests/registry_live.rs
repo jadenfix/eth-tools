@@ -12,6 +12,9 @@ use std::{
 };
 
 fn rpc_fixture(logs: Vec<Log>, head: u64) -> String {
+    rpc_fixture_with_chain(logs, head, 8453)
+}
+fn rpc_fixture_with_chain(logs: Vec<Log>, head: u64, chain: u64) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     std::thread::spawn(move || {
@@ -41,6 +44,7 @@ fn rpc_fixture(logs: Vec<Log>, head: u64) -> String {
                 }
             };
             let result = match request["method"].as_str().unwrap() {
+                "eth_chainId" => json!(format!("0x{chain:x}")),
                 "eth_blockNumber" => json!(format!("0x{head:x}")),
                 "eth_getLogs" => {
                     let f = &request["params"][0];
@@ -139,6 +143,16 @@ async fn required_live_postgres_identity_batch_replay_and_dryrun() {
         dryrun: true,
         force: false,
     };
+    let wrong_endpoint = rpc_fixture_with_chain(Vec::new(), block + 12, 1);
+    let mut wrong = context.clone();
+    wrong.rpc = Arc::new(RotatingProvider::new(vec![Arc::new(
+        HttpProvider::new("wrong-chain", &wrong_endpoint).unwrap(),
+    )]));
+    assert!(registry::run(wrong)
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("not Base"));
     assert_eq!(registry::run(context.clone()).await.unwrap().rows_out, 3);
     assert!(eth_tools_db::agents::get_one(
         &pool,

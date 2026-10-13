@@ -31,6 +31,9 @@ pub const TOOL_NAMES: &[&str] = &[
 pub async fn handle(request: serde_json::Value, api_base: &str) -> serde_json::Value {
     use serde_json::json;
     let id = request.get("id").cloned().unwrap_or(serde_json::Value::Null);
+    if request["jsonrpc"] != "2.0" || !request.is_object() {
+        return json!({"jsonrpc":"2.0","id":id,"error":{"code":-32600,"message":"Invalid JSON-RPC request"}});
+    }
     let result = match request["method"].as_str() {
         Some("initialize") => Ok(
             json!({"protocolVersion":"2025-03-26","capabilities":{"tools":{}},"serverInfo":{"name":"eth-tools","version":env!("CARGO_PKG_VERSION")}}),

@@ -92,6 +92,14 @@ impl RpcProvider for HttpProvider {
             .ok_or_else(|| RpcError::Permanent("invalid block quantity".into()))?;
         u64::from_str_radix(text, 16).map_err(|_| RpcError::Permanent("invalid block quantity".into()))
     }
+    async fn get_chain_id(&self) -> Result<u64, RpcError> {
+        let value = self.request("eth_chainId", json!([])).await?;
+        let text = value
+            .as_str()
+            .and_then(|s| s.strip_prefix("0x"))
+            .ok_or_else(|| RpcError::Permanent("invalid chain identity".into()))?;
+        u64::from_str_radix(text, 16).map_err(|_| RpcError::Permanent("invalid chain identity".into()))
+    }
     async fn get_block_timestamp(&self, block: u64) -> Result<u64, RpcError> {
         let value = self
             .request("eth_getBlockByNumber", json!([format!("0x{block:x}"), false]))

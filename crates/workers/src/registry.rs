@@ -11,6 +11,15 @@ use vercel_runtime::Error;
 
 pub async fn run(context: WorkerContext) -> Result<WorkerSummary, Error> {
     let chain = eth_tools_core::chains::by_name("base").ok_or("Base configuration missing")?;
+    if context
+        .rpc
+        .get_chain_id()
+        .await
+        .map_err(|_| Error::from("RPC chain identity unavailable"))?
+        != chain.chain_id
+    {
+        return Err(Error::from("RPC endpoint is not Base; no cursor advanced"));
+    }
     let head = context
         .rpc
         .get_block_number()

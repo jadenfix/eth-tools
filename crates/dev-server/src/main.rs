@@ -44,7 +44,13 @@ async fn main() -> anyhow::Result<()> {
         "/api/mcp",
         axum::routing::post(move |axum::Json(request): axum::Json<serde_json::Value>| {
             let base = api_base.clone();
-            async move { axum::Json(eth_tools_mcp::handle(request, &base).await) }
+            async move {
+                use axum::response::IntoResponse;
+                if request.get("id").is_none() {
+                    return axum::http::StatusCode::ACCEPTED.into_response();
+                }
+                axum::Json(eth_tools_mcp::handle(request, &base).await).into_response()
+            }
         }),
     );
     tracing::info!("dev-server listening on http://{addr}");

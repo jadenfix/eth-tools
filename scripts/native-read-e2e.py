@@ -44,6 +44,8 @@ def main():
             cli=json.loads(subprocess.check_output([str(binaries/'eth-tools'),'--api-url',base,'inspect',reference],cwd=ROOT));assert cli['data']==agent
             listed=json.loads(subprocess.check_output([str(binaries/'eth-tools'),'--api-url',base,'find',agent['agent_id']],cwd=ROOT));assert any(a['agent_id']==agent['agent_id'] for a in listed['data'])
             initialized=request('/api/mcp',{'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-03-26','capabilities':{},'clientInfo':{'name':'native-gate','version':'1'}}});assert initialized['result']['capabilities']['tools']=={}
+            notification=urllib.request.Request(base+'/api/mcp',data=json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'}).encode(),headers={'content-type':'application/json'})
+            with urllib.request.urlopen(notification,timeout=10) as response:assert response.status==202 and not response.read()
             tools=request('/api/mcp',{'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}});assert {t['name'] for t in tools['result']['tools']}=={'health','inspect_agent','search_agents'}
             result=request('/api/mcp',{'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'inspect_agent','arguments':{'chain':agent['chain'],'agent_id':agent['agent_id']}}});assert not result['result']['isError'];assert json.loads(result['result']['content'][0]['text'])['data']==agent
             unknown=request('/api/mcp',{'jsonrpc':'2.0','id':4,'method':'tools/call','params':{'name':'register_agent','arguments':{}}});assert unknown['error']['code']==-32602
