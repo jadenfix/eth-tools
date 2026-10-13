@@ -1,0 +1,40 @@
+name: native registry E2E
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  postgres-rpc-cli-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: inert-e2e-only
+          POSTGRES_DB: eth_tools_e2e
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d eth_tools_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:inert-e2e-only@127.0.0.1:5432/eth_tools_e2e
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy -p eth-tools-rpc -p eth-tools-cli -p eth-tools-workers -p eth-tools-mcp -p eth-tools-dev-server --all-targets -- -D warnings
+      - name: Actual HTTP RPC failover, pagination and filter tests
+        run: cargo test --locked -p eth-tools-core -p eth-tools-rpc
+      - name: Required RPC -> PostgreSQL atomic identity indexing
+        run: cargo test --locked -p eth-tools-workers --test registry_live -- --ignored
+      - name: Native API, CLI, MCP and durable restart
+        run: python3 scripts/native-read-e2e.py

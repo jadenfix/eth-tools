@@ -22,6 +22,9 @@ eth-tools-core.workspace = true
 eth-tools-rpc.workspace = true
 eth-tools-db.workspace = true
 
+bigdecimal.workspace = true
+alloy-primitives.workspace = true
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
 chrono = { workspace = true }

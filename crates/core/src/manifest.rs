@@ -27,7 +27,6 @@ pub struct Service {
     pub endpoint: String,
 }
 
-pub fn keccak256_raw_bytes(_bytes: &[u8]) -> [u8; 32] {
-    // Real keccak lands with the alloy dep in the next PR.
-    [0u8; 32]
+pub fn keccak256_raw_bytes(bytes: &[u8]) -> [u8; 32] {
+    alloy_primitives::keccak256(bytes).0
 }

@@ -32,7 +32,7 @@ use eth_tools_rpc::RotatingProvider;
 use tokio::sync::{OnceCell, SetError};
 use vercel_runtime::Error;
 
-use crate::rpc_http::StubProvider;
+use eth_tools_rpc::{HttpProvider, RpcProvider};
 
 /// Per-request payload handed to every worker body. The body owns the
 /// borrowed `pool` / `rpc` for the duration of the invocation and uses
@@ -104,22 +104,18 @@ async fn build_deps() -> Result<WorkerDeps, Error> {
         .await
         .map_err(|e| Error::from(format!("db connect failed: {e}")))?;
 
-    // PR3 TODO: replace StubProvider with real alloy-HTTP impls built from
-    // these URLs. We still read the env vars here so a misconfigured deploy
-    // (missing RPC_URL_PRIMARY in production) trips an alert instead of
-    // silently falling through.
-    let primary_url = std::env::var("RPC_URL_PRIMARY").ok();
-    let fallback_url = std::env::var("RPC_URL_FALLBACK").ok();
-    if primary_url.is_none() {
-        tracing::warn!("RPC_URL_PRIMARY not set; using StubProvider (PR3 will wire alloy)");
+    let mut providers: Vec<Arc<dyn RpcProvider>> = Vec::new();
+    for (name, variable) in [("primary", "RPC_URL_PRIMARY"), ("fallback", "RPC_URL_FALLBACK")] {
+        if let Ok(url) = std::env::var(variable) {
+            providers.push(Arc::new(
+                HttpProvider::new(name, &url).map_err(|_| Error::from("invalid RPC configuration"))?,
+            ));
+        }
     }
-    if fallback_url.is_none() {
-        tracing::warn!("RPC_URL_FALLBACK not set");
+    if providers.is_empty() {
+        return Err(Error::from("RPC_URL_PRIMARY or RPC_URL_FALLBACK required"));
     }
-
-    let rpc = Arc::new(RotatingProvider::new(vec![Arc::new(StubProvider::new(
-        "stub-primary",
-    ))]));
+    let rpc = Arc::new(RotatingProvider::new(providers));
 
     Ok(WorkerDeps { pool, rpc })
 }
