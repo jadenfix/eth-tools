@@ -78,12 +78,7 @@ pub async fn begin(
 /// events / endpoints / agents the worker read; `rows_out` is what it wrote
 /// (or would have, under dry-run). The dashboard surfaces both for SLO
 /// visibility.
-pub async fn finish_ok(
-    pool: &PgPool,
-    handle: RunHandle,
-    rows_in: i32,
-    rows_out: i32,
-) -> sqlx::Result<()> {
+pub async fn finish_ok(pool: &PgPool, handle: RunHandle, rows_in: i32, rows_out: i32) -> sqlx::Result<()> {
     sqlx::query(
         "UPDATE worker_runs
             SET finished_at = NOW(),

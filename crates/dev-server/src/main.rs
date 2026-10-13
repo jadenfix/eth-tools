@@ -35,8 +35,18 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("applied fixtures/seed.sql (disable with ETH_TOOLS_AUTO_SEED=0)");
     }
 
-    let app = eth_tools_api::router(eth_tools_api::AppState::new(pool));
-    let addr: SocketAddr = "127.0.0.1:3000".parse()?;
+    let addr: SocketAddr = std::env::var("ETH_TOOLS_LISTEN_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:3000".into())
+        .parse()?;
+    anyhow::ensure!(addr.ip().is_loopback(), "development server must bind loopback");
+    let api_base = format!("http://{addr}");
+    let app = eth_tools_api::router(eth_tools_api::AppState::new(pool)).route(
+        "/api/mcp",
+        axum::routing::post(move |axum::Json(request): axum::Json<serde_json::Value>| {
+            let base = api_base.clone();
+            async move { axum::Json(eth_tools_mcp::handle(request, &base).await) }
+        }),
+    );
     tracing::info!("dev-server listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

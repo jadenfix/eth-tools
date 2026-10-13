@@ -24,8 +24,5 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn handler(req: Request) -> Result<Response<Body>, Error> {
-    eth_tools_workers::cron::serve(WORKER_NAME, req, |_dryrun| async move {
-        Ok(eth_tools_workers::WorkerSummary::ok(WORKER_NAME))
-    })
-    .await
+    eth_tools_workers::cron::serve_with_context(WORKER_NAME, req, eth_tools_workers::registry::run).await
 }

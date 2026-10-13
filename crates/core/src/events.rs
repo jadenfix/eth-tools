@@ -2,8 +2,8 @@
 //! `Transfer` event (used by Worker W1, the registry scraper).
 //!
 //! The four events scraped by W1 (see plan §3 row W1):
-//! 1. `Registered(uint256 indexed agentId, address indexed owner, string agentUri)`
-//! 2. `URIUpdated(uint256 indexed agentId, string newUri)`
+//! 1. `Registered(uint256 indexed agentId, string agentUri, address indexed owner)`
+//! 2. `URIUpdated(uint256 indexed agentId, string newUri, address indexed updatedBy)`
 //! 3. `MetadataSet(uint256 indexed agentId, string key, bytes value)`
 //! 4. ERC-721 `Transfer(address indexed from, address indexed to, uint256 indexed tokenId)`
 //!
@@ -20,11 +20,11 @@ use alloy_primitives::B256;
 sol! {
     /// Emitted by the ERC-8004 Identity registry when a new agent is registered.
     #[derive(Debug)]
-    event Registered(uint256 indexed agentId, address indexed owner, string agentUri);
+    event Registered(uint256 indexed agentId, string agentUri, address indexed owner);
 
     /// Emitted when an agent's manifest URI is rotated.
     #[derive(Debug)]
-    event URIUpdated(uint256 indexed agentId, string newUri);
+    event URIUpdated(uint256 indexed agentId, string newUri, address indexed updatedBy);
 
     /// Emitted when arbitrary key/value metadata is set on an agent
     /// (e.g. `agentWallet` rotations — see W6).
@@ -36,10 +36,10 @@ sol! {
     event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
 }
 
-/// `keccak256("Registered(uint256,address,string)")`
+/// `keccak256("Registered(uint256,string,address)")`
 pub const REGISTERED_TOPIC: B256 = Registered::SIGNATURE_HASH;
 
-/// `keccak256("URIUpdated(uint256,string)")`
+/// `keccak256("URIUpdated(uint256,string,address)")`
 pub const URI_UPDATED_TOPIC: B256 = URIUpdated::SIGNATURE_HASH;
 
 /// `keccak256("MetadataSet(uint256,string,bytes)")`
@@ -83,11 +83,11 @@ mod tests {
         }
     }
 
-    /// `Registered.SIGNATURE` is the canonical "Registered(uint256,address,string)"
+    /// `Registered.SIGNATURE` is the canonical "Registered(uint256,string,address)"
     /// string emitted by the alloy macro — guards against parameter-rename drift.
     #[test]
     fn registered_signature_matches_spec() {
-        assert_eq!(Registered::SIGNATURE, "Registered(uint256,address,string)");
+        assert_eq!(Registered::SIGNATURE, "Registered(uint256,string,address)");
         // hex/B256 imports kept used so clippy doesn't complain.
         let _ = hex::encode([0u8; 4]);
     }

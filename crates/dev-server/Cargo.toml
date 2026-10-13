@@ -19,3 +19,6 @@ tracing-subscriber.workspace = true
 sqlx.workspace = true
 eth-tools-api.workspace = true
 eth-tools-db.workspace = true
+
+eth-tools-mcp.workspace = true
+serde_json.workspace = true

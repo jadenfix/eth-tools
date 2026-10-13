@@ -39,10 +39,7 @@ pub struct Cursor {
 
 /// Fetch the cursor for `cursor_key`, or `None` if the worker has never run
 /// against this `(chain, contract, topic)` triple before.
-pub async fn get(
-    executor: &mut PgConnection,
-    cursor_key: &str,
-) -> sqlx::Result<Option<Cursor>> {
+pub async fn get(executor: &mut PgConnection, cursor_key: &str) -> sqlx::Result<Option<Cursor>> {
     sqlx::query_as::<_, Cursor>(
         "SELECT cursor_key, last_block, last_log_index, updated_at
          FROM cursors WHERE cursor_key = $1",

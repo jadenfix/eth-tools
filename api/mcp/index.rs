@@ -17,15 +17,29 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn handler(req: Request) -> Result<Response<Body>, Error> {
-    tracing::info!(method = %req.method(), uri = %req.uri(), "api_mcp request");
-    let body = serde_json::json!({
-        "service": "eth-tools",
-        "function": "api_mcp",
-        "status": "bootstrap",
-        "tools_planned": eth_tools_mcp::TOOL_NAMES,
-    });
+    if req.method() != http::Method::POST {
+        return Ok(Response::builder()
+            .status(StatusCode::METHOD_NOT_ALLOWED)
+            .body(Body::Empty)?);
+    }
+    let bytes = match req.into_body() {
+        Body::Text(s) => s.into_bytes(),
+        Body::Binary(b) => b,
+        Body::Empty => Vec::new(),
+    };
+    let request: serde_json::Value = match serde_json::from_slice(&bytes) {
+        Ok(v) => v,
+        Err(_) => {
+            return Ok(Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Body::Empty)?)
+        }
+    };
+    let base =
+        std::env::var("ETH_TOOLS_API_URL").map_err(|_| Error::from("ETH_TOOLS_API_URL required for MCP"))?;
+    let result = eth_tools_mcp::handle(request, &base).await;
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("content-type", "application/json")
-        .body(Body::Text(body.to_string()))?)
+        .body(Body::Text(result.to_string()))?)
 }

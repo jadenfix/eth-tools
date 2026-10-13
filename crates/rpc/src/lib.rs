@@ -47,6 +47,8 @@ pub(crate) fn mono_now() -> Instant {
 }
 
 pub mod health;
+pub mod http;
+pub use http::HttpProvider;
 
 pub use health::ProviderHealth;
 
@@ -118,6 +120,11 @@ pub trait RpcProvider: Send + Sync {
 
     /// `eth_blockNumber`.
     async fn get_block_number(&self) -> Result<u64, RpcError>;
+
+    /// Timestamp of the canonical block containing a registry event.
+    async fn get_block_timestamp(&self, _block: u64) -> Result<u64, RpcError> {
+        Err(RpcError::Permanent("block timestamp method unavailable".into()))
+    }
 
     /// `eth_getLogs` for the **exact** filter the caller supplied. Pagination
     /// is the rotator's job (see `RotatingProvider::get_logs_paginated`).
@@ -352,6 +359,11 @@ impl RotatingProvider {
     /// Fetch the current `eth_blockNumber` with rotator failover.
     pub async fn get_block_number(&self) -> Result<u64, RpcError> {
         self.call(|p| async move { p.get_block_number().await }).await
+    }
+
+    pub async fn get_block_timestamp(&self, block: u64) -> Result<u64, RpcError> {
+        self.call(move |p| async move { p.get_block_timestamp(block).await })
+            .await
     }
 
     /// Fetch logs matching `filter` across `[start_block, end_block]` in
